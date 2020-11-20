@@ -20,8 +20,10 @@ This program was designed to be used with RTL-SDR, specifically rtl-fm.
 
     rtl_fm -f 144.91M -s 48k -C | ./m17-demod | play -b 16 -r 8000 -c1 -t s16 -
 
-Note that, at least as of now, the `rtl-fm` `-C` option is required in order
-for the demodulator to work properly.
+Note that the `rtl-fm` `-C` option may be required in order for the demodulate
+the baseband signal if the receiver is not closely tuned to the transmit
+frequency.  The oscillators on the PlutoSDR and on most RTL-SDR dongles are
+rather inaccurate.
 
 This was tested using the [m17-gnuradio](https://github.com/mobilinkd/m17-gnuradio)
 GNU Radio block feeding an Analog Devices 

@@ -122,7 +122,6 @@ struct M17FrameDecoder
         auto checksum = crc_.get();
         demodulate_audio(audio);
         uint16_t fn = (audio[0] << 8) | audio[1];
-        std::cerr << fn << std::endl;
         if (checksum == 0 && fn > 0x7fff) state_ = State::LS_FRAME;
     }
 
