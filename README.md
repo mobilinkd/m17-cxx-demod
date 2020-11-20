@@ -12,13 +12,13 @@ running.
 
 This code requires the codec2-devel package be installed.
 
-   make CXXFLAGS="-std=gnu++17 -O3 $(pkg-config --libs codec2)" m17-demod
+    make CXXFLAGS="-std=gnu++17 -O3 $(pkg-config --libs codec2)" m17-demod
 
 ## Running
 
 This program was designed to be used with RTL-SDR, specifically rtl-fm.
 
-   rtl_fm -f 144.91M -s 48k -C | ./m17-demod | play -b 16 -r 8000 -c1 -t s16 -
+    rtl_fm -f 144.91M -s 48k -C | ./m17-demod | play -b 16 -r 8000 -c1 -t s16 -
 
 Note that, at least as of now, the `rtl-fm` `-C` option is required in order
 for the demodulator to work properly.
