@@ -12,7 +12,11 @@ running.
 
 This code requires the codec2-devel package be installed.
 
-    make CXXFLAGS="-std=gnu++17 -O3 $(pkg-config --libs codec2)" m17-demod
+    mkdir build
+    cd build
+    cmake ..
+    make
+    sudo make install
 
 ## Running
 
