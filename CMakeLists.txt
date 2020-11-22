@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.0)
 project(m17-cxx-demod)
 enable_language(CXX)
 
-#C++11 is a required language feature for this project
+# C++17 is a required language feature for this project
 set(CMAKE_CXX_STANDARD 17)
 
 if(NOT CMAKE_BUILD_TYPE)
