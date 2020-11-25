@@ -18,6 +18,7 @@ struct CarrierDetect
     FloatType lock_;
     FloatType unlock_;
     std::array<FloatType, N> samples_;
+    FloatType sum_ = 0.0;
     size_t index_ = 0;
     bool locked_ = false;
 
@@ -29,10 +30,12 @@ struct CarrierDetect
     
     result_t operator()(FloatType evm)
     {
-        samples_[index_++] = evm * evm;
+        auto tmp = evm * evm;
+        sum_ = sum_ - samples_[index_] + tmp;
+        samples_[index_++] = tmp;
         if (index_ == N) index_ = 0;
         
-        auto rms = std::sqrt(std::accumulate(std::begin(samples_), std::end(samples_), 0.0) / N);
+        auto rms = std::sqrt(sum_ / N);
         if (!locked_)
         {
             if (rms < lock_) locked_ = true;
