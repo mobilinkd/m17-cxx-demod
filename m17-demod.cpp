@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
 
-    auto demod = Fsk4Demod(48000.0, 4800.0, 0.01);
+    auto demod = Fsk4Demod(48000.0, 4800.0, 0.03);
     auto dcd = CarrierDetect<double, 10>(0.1, 0.4);
     auto synch = M17Synchronizer();
     auto framer = M17Framer();
@@ -63,6 +63,7 @@ int main(int argc, char* argv[])
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
         auto result = demod(sample / 5000.0);
+        size_t ber = 0;
         if (result)
         {
             count += 1;
@@ -77,6 +78,7 @@ int main(int argc, char* argv[])
                     state = State::SYNCHING;
                     // std::cout << "Lock!" << std::endl;
                     decoder.reset();
+                    ber = -1;
                 }
                 break;
             case State::SYNCHING:
@@ -102,7 +104,7 @@ int main(int argc, char* argv[])
                         state = State::SYNCHING;
                         std::copy(frame, frame + len, buffer.begin());
                         // std::cout << "Frame!" << std::endl;
-                        decoder(buffer);
+                        ber = decoder(buffer);
                     }
                 }
                 break;
@@ -115,7 +117,8 @@ int main(int argc, char* argv[])
                     << ", evm: " << std::setw(10) << rms
                     << ", deviation: " << std::setw(10) << estimated_deviation
                     << ", freq offset: " << std::setw(10) << estimated_frequency_offset
-                    << ", locked: " << std::boolalpha << locked << std::ends;
+                    << ", locked: " << std::boolalpha << std::setw(6) << locked
+                    << ", ber: " << ber << std::ends;
             }
         }
     }

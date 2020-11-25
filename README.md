@@ -1,7 +1,5 @@
 # m17-cxx-demod
-M17 Demodulator in C++ (GPL) **IMPORTANT NOTE: Until I re-implement the Viterbi
-decoder, this code carries the additional restriction from G4KLX that it may not be
-used for commercial purposes.**
+M17 Demodulator in C++ (GPL)
 
 This program reads a 48K SPS 16-bit, little-endian, single channel, M17  4-FSK
 baseband input stream from STDIN and writes a demodulated/decoded 8K SPS
@@ -41,5 +39,3 @@ encoding.  It is out of date with the current M17 spec.
 ## Thanks
 
 Thanks to the M17 team to for the great work on the spec.
-
-Thanks to Jonathan Naylor, G4KLX, for the convolutional encoder/decoder.
