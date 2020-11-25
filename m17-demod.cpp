@@ -57,13 +57,13 @@ int main(int argc, char* argv[])
     State state = State::UNLOCKED;
     int8_t* frame;
     alignas(16) std::array<int8_t, framer.size()> buffer;
+    uint32_t ber = 0;
 
     while (std::cin)
     {
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
         auto result = demod(sample / 5000.0);
-        size_t ber = 0;
         if (result)
         {
             count += 1;
@@ -113,10 +113,10 @@ int main(int argc, char* argv[])
             if ((count % 192) == 0)
             {
                 std::cerr << "\r count: " << std::setw(8) << count
-                    << ", phase: " << std::setw(10) << phase_estimate
-                    << ", evm: " << std::setw(10) << rms
-                    << ", deviation: " << std::setw(10) << estimated_deviation
-                    << ", freq offset: " << std::setw(10) << estimated_frequency_offset
+                    << ", phase: " << std::setprecision(2) << std::setw(8) << phase_estimate
+                    << ", evm: " << std::setprecision(2) << std::setw(8) << rms
+                    << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
+                    << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
                     << ", locked: " << std::boolalpha << std::setw(6) << locked
                     << ", ber: " << ber << std::ends;
             }
