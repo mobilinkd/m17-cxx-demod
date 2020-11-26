@@ -5,6 +5,7 @@
 #include "FirFilter.h"
 #include "PhaseEstimator.h"
 #include "DeviationError.h"
+#include "FrequencyError.h"
 #include "SymbolEvm.h"
 
 #include <array>
@@ -47,11 +48,12 @@ inline const auto evm_a = std::experimental::make_array<double>(1.0, -1.56101808
 struct Fsk4Demod
 {
     using demod_result_t = std::tuple<double, double, int, double>;
-    using result_t = std::optional<std::tuple<double, double, int, double, double, double>>;
+    using result_t = std::optional<std::tuple<double, double, int, double, double, double, double>>;
 
     BaseFirFilter<double, std::tuple_size<decltype(detail::rrc_taps)>::value> rrc = makeFirFilter(detail::rrc_taps);
     PhaseEstimator<double> phase = PhaseEstimator<double>(48000, 4800);
     DeviationError<double> deviation;
+    FrequencyError<double, 32> frequency;
     SymbolEvm<double,  std::tuple_size<decltype(detail::evm_b)>::value> symbol_evm = makeSymbolEvm(makeIirFilter(detail::evm_b, detail::evm_a));
 
     double sample_rate = 48000;
@@ -64,6 +66,7 @@ struct Fsk4Demod
     bool sample_now = false;
     double estimated_deviation = 1.0;
     double estimated_frequency_offset = 0.0;
+    double evm_average = 0.0;
 
     Fsk4Demod(double sample_rate, double symbol_rate, double gain = 0.04)
     : sample_rate(sample_rate)
@@ -78,9 +81,11 @@ struct Fsk4Demod
     demod_result_t demod()
     {
         estimated_deviation = deviation(samples[1]);
-        
-        for (auto& sample : samples) sample = (sample * estimated_deviation) - estimated_frequency_offset;
-
+        for (auto& sample : samples) sample *= estimated_deviation;
+    
+        estimated_frequency_offset = frequency(samples[1]);
+        for (auto& sample : samples) sample -= estimated_frequency_offset;
+    
         auto phase_estimate = phase(samples);
         if (samples[1] < 0) phase_estimate *= -1;
         
@@ -88,7 +93,7 @@ struct Fsk4Demod
         t += dt;
         
         auto [symbol, evm] = symbol_evm(samples[1]);
-        estimated_frequency_offset = symbol_evm.evm();
+        evm_average = symbol_evm.evm();
         samples[0] = samples[2];
 
         return std::make_tuple(samples[1], phase_estimate, symbol, evm);
@@ -109,7 +114,7 @@ struct Fsk4Demod
             samples[2] = filtered_sample;
             sample_now = false;
             auto [prev_sample, phase_estimate, symbol, evm] = demod();
-            return std::make_tuple(prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset);
+            return std::make_tuple(prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evm_average);
         }
             
         t += dt;

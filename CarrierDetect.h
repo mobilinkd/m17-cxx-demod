@@ -18,7 +18,9 @@ struct CarrierDetect
     FloatType lock_;
     FloatType unlock_;
     std::array<FloatType, N> samples_;
+    std::array<FloatType, N> variances_;
     FloatType sum_ = 0.0;
+    FloatType var_ = 0.0;
     size_t index_ = 0;
     bool locked_ = false;
 
@@ -30,22 +32,25 @@ struct CarrierDetect
     
     result_t operator()(FloatType evm)
     {
-        auto tmp = evm * evm;
-        sum_ = sum_ - samples_[index_] + tmp;
-        samples_[index_++] = tmp;
+        sum_ = sum_ - samples_[index_] + evm;
+        auto var = evm - (sum_ / N);
+        var_ = var_ - variances_[index_] + (var * var);
+        variances_[index_] = (var * var);
+        samples_[index_++] = evm;
         if (index_ == N) index_ = 0;
         
-        auto rms = std::sqrt(sum_ / N);
+        auto variance = var_ / N;
+        auto stdev = sqrt(variance);
         if (!locked_)
         {
-            if (rms < lock_) locked_ = true;
+            if (stdev < lock_) locked_ = true;
         }
         else
         {
-            if (rms > unlock_) locked_ = false;
+            if (stdev > unlock_) locked_ = false;
         }
 
-        return std::make_tuple(locked_, rms);
+        return std::make_tuple(locked_, stdev);
     }
 };
 

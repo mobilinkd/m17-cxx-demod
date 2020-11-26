@@ -117,7 +117,7 @@ struct M17FrameDecoder
     {
         derandomize_(buffer);
         interleaver_.deinterleave(buffer);
-        size_t ber = -1;
+        size_t ber = 1000;
 
         switch(state_)
         {

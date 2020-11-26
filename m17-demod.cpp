@@ -46,8 +46,8 @@ int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
 
-    auto demod = Fsk4Demod(48000.0, 4800.0, 0.03);
-    auto dcd = CarrierDetect<double, 10>(0.1, 0.4);
+    auto demod = Fsk4Demod(48000.0, 4800.0, 0.02);
+    auto dcd = CarrierDetect<double, 32>(0.2, 1.0);
     auto synch = M17Synchronizer();
     auto framer = M17Framer();
     auto decoder = M17FrameDecoder();
@@ -63,12 +63,12 @@ int main(int argc, char* argv[])
     {
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
-        auto result = demod(sample / 5000.0);
+        auto result = demod(sample / 5600.0);
         if (result)
         {
             count += 1;
-            auto [prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset] = *result;
-            auto [locked, rms] = dcd(estimated_frequency_offset);
+            auto [prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evma] = *result;
+            auto [locked, rms] = dcd(evm);
 
             switch (state)
             {
@@ -114,11 +114,12 @@ int main(int argc, char* argv[])
             {
                 std::cerr << "\r count: " << std::setw(8) << count
                     << ", phase: " << std::setprecision(2) << std::setw(8) << phase_estimate
-                    << ", evm: " << std::setprecision(2) << std::setw(8) << rms
+                    << ", evm: " << std::setprecision(2) << std::setw(8) << evma
                     << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
                     << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
                     << ", locked: " << std::boolalpha << std::setw(6) << locked
-                    << ", ber: " << ber << std::ends;
+                    << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
+                    << ", ber: " << ber << "         "  << std::ends;
             }
         }
     }
