@@ -25,7 +25,7 @@ struct M17FrameDecoder
     M17Randomizer<368> derandomize_;
     PolynomialInterleaver<45, 92, 368> interleaver_;
     Trellis<4,2> trellis_{makeTrellis<4, 2>({031,027})};
-    Viterbi<decltype(trellis_)> viterbi_{trellis_};
+    Viterbi<decltype(trellis_), 4> viterbi_{trellis_};
     CRC16<0x5935, 0xFFFF> crc_;
 
     enum class State {LS_FRAME, LS_LICH, AUDIO};
@@ -68,19 +68,27 @@ struct M17FrameDecoder
     size_t decode_lsf(buffer_t& buffer)
     {
         std::array<uint8_t, 240> output;
-        for (auto& c : buffer) c = c * 2 - 1;
         auto dp = depunctured<488>(P1, buffer);
+        // std::cerr << std::endl;
+        // for (auto i : dp) std::cerr << int(i) << ", ";
+        // std::cerr << std::endl;
         auto ber = viterbi_.decode(dp, output);
+        ber = ber > 60 ? ber - 60 : 0;
         auto lsf = to_byte_array(output);
         crc_.reset();
         for (auto x : lsf) crc_(x);
         auto checksum = crc_.get();
         if (checksum == 0) state_ = State::AUDIO;
-        else return ber;
+        else
+        {
+            // std::cerr << "\nLSF checksum failure." << std::endl;
+            state_ = State::LS_LICH;
+            return ber;
+        }
         LinkSetupFrame::encoded_call_t encoded_call;
         std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
         auto mycall = LinkSetupFrame::decode_callsign(encoded_call);
-        std::cerr << "\nTOCALL: ";
+        std::cerr << "\nCALL SIGN: ";
         for (auto x : mycall) if (x) std::cerr << x;
         std::cerr << std::endl;
         return ber;
@@ -100,16 +108,19 @@ struct M17FrameDecoder
         std::array<int8_t, 272> tmp;
         std::copy(buffer.begin() + 96, buffer.end(), tmp.begin());
         std::array<uint8_t, 160> output;
-        for (auto& c : tmp) c = c * 2 - 1;
         auto dp = depunctured<328>(P2, tmp);
         auto ber = viterbi_.decode(dp, output);
+        ber = ber > 28 ? ber - 28 : 0;
         auto audio = to_byte_array(output);
         crc_.reset();
         for (auto x : audio) crc_(x);
         auto checksum = crc_.get();
         demodulate_audio(audio);
         uint16_t fn = (audio[0] << 8) | audio[1];
-        if (checksum == 0 && fn > 0x7fff) state_ = State::LS_FRAME;
+        if (checksum == 0 && fn > 0x7fff)
+        {
+            state_ = State::LS_FRAME;
+        }
         return ber;
     }
 

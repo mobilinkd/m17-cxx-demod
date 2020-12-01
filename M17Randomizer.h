@@ -33,7 +33,7 @@ struct M17Randomizer
         {
             for (size_t j = 0; j != 8; ++j)
             {
-                dc_[i++] = (b >> (7 - j)) & 1;
+                dc_[i++] = (b >> (7 - j)) & 1 ? -1 : 1;
             }
         }
     }
@@ -43,7 +43,7 @@ struct M17Randomizer
     {
         for (size_t i = 0; i != N; ++i)
         {
-            frame[i] = bool(frame[i]) ^ bool(dc_[i]);
+            frame[i] *= dc_[i];
         }
     }
 

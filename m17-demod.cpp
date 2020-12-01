@@ -46,14 +46,15 @@ int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
 
-    auto demod = Fsk4Demod(48000.0, 4800.0, 0.02);
-    auto dcd = CarrierDetect<double, 32>(0.2, 1.0);
-    auto synch = M17Synchronizer();
+    auto demod = Fsk4Demod(48000.0, 4800.0, 0.005);
+    auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.6);
+    auto sync1 = M17Synchronizer(0x3243, 1);
+    auto sync4 = M17Synchronizer(0x3243, 4);
     auto framer = M17Framer();
     auto decoder = M17FrameDecoder();
 
     int count = 0;
-    enum class State { UNLOCKED, SYNCHING, FRAMING};
+    enum class State { UNLOCKED, SYNCHING, FR_SYNC, FRAMING};
     State state = State::UNLOCKED;
     int8_t* frame;
     alignas(16) std::array<int8_t, framer.size()> buffer;
@@ -66,54 +67,70 @@ int main(int argc, char* argv[])
         auto result = demod(sample / 5600.0);
         if (result)
         {
-            count += 1;
             auto [prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evma] = *result;
             auto [locked, rms] = dcd(evm);
 
             switch (state)
             {
             case State::UNLOCKED:
-                if (locked)
-                {
-                    state = State::SYNCHING;
-                    // std::cout << "Lock!" << std::endl;
-                    decoder.reset();
-                    ber = -1;
-                }
-                break;
+                if (!locked) break;
+                state = State::SYNCHING;
+                framer.reset();
+                decoder.reset();
+                ber = 1000;
+                // Fall-through
             case State::SYNCHING:
                 if (!locked)
                 {
                     state = State::UNLOCKED;
-                    // std::cout << "Unlock!" << std::endl;
                 }
-                else if (synch(from_4fsk(symbol)))
+                else if (sync1(from_4fsk(symbol)))
                 {
                     state = State::FRAMING;
-                    // std::cout << "Sync!" << std::endl;
+                }
+                else
+                {
+                    // pass
+                }
+                break;
+            case State::FR_SYNC:
+                if (!locked)
+                {
+                    state = State::UNLOCKED;
+                }
+                else if (sync4(from_4fsk(symbol)))
+                {
+                    state = State::FRAMING;
+                }
+                else
+                {
+                    // pass
                 }
                 break;
             case State::FRAMING:
                 {
-                    auto n = from_4fsk(symbol);
-                    auto len = framer(n >> 1, &frame);
-                    assert(len == 0); // frames must end on symbol boundaries.
-                    len = framer(n & 1, &frame);
-                    if (len != 0)
+                    if (!locked)
                     {
-                        state = State::SYNCHING;
-                        std::copy(frame, frame + len, buffer.begin());
-                        // std::cout << "Frame!" << std::endl;
-                        ber = decoder(buffer);
+                        state = State::UNLOCKED;
+                    }
+                    else
+                    {
+                        auto n = llr<double, 4>(prev_sample);
+                        auto len = framer(n, &frame);
+                        if (len != 0)
+                        {
+                            state = State::FR_SYNC;
+                            std::copy(frame, frame + len, buffer.begin());
+                            ber = decoder(buffer);
+                        }
                     }
                 }
                 break;
             }
 
-            if ((count % 192) == 0)
+            if ((count++ % 192) == 0)
             {
-                std::cerr << "\r count: " << std::setw(8) << count
-                    << ", phase: " << std::setprecision(2) << std::setw(8) << phase_estimate
+                std::cerr << "\rstate: " << int(state)
                     << ", evm: " << std::setprecision(2) << std::setw(8) << evma
                     << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
                     << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset

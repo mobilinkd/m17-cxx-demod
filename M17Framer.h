@@ -23,9 +23,24 @@ struct M17Framer
 
     static constexpr size_t size() { return N; }
 
-    size_t operator()(int bit, int8_t** result)
+    size_t operator()(int dibit, int8_t** result)
     {
-        buffer_[index_++] = bit;
+        buffer_[index_++] = (dibit >> 1) ? 1 : -1;
+        buffer_[index_++] = (dibit & 1) ? 1 : -1;
+        if (index_ == N)
+        {
+            index_ = 0;
+            *result = buffer_.begin();
+            return N;
+        }
+        return 0;
+    }
+
+    // LLR mode
+    size_t operator()(std::tuple<int8_t, int8_t> symbol, int8_t** result)
+    {
+        buffer_[index_++] = std::get<0>(symbol);
+        buffer_[index_++] = std::get<1>(symbol);
         if (index_ == N)
         {
             index_ = 0;
