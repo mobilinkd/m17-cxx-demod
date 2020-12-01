@@ -9,6 +9,7 @@
 #include <bitset>
 #include <tuple>
 
+
 namespace mobilinkd
 {
 
@@ -25,6 +26,46 @@ constexpr std::bitset<sizeof...(Is)> make_bitset(std::index_sequence<Is...>, Tup
     for (size_t i = 0; i != size; ++i)
     {
         void(expand {0, result[Is] = std::get<Is>(tuple)...});
+    }
+    return result;
+}
+
+template<typename FloatType, size_t LLR>
+constexpr std::array<std::tuple<FloatType, std::tuple<int8_t, int8_t>>, (((1 << (LLR - 1)) - 1) * 6 ) + 1> make_llr_map()
+{
+    constexpr size_t size = (((1 << (LLR - 1)) - 1) * 6 ) + 1;
+    std::array<std::tuple<FloatType, std::tuple<int8_t, int8_t>>, size> result;
+
+    constexpr int8_t limit = (1 << (LLR - 1)) - 1;
+    constexpr FloatType inc = 1.0 / FloatType(limit);
+    int8_t i = limit;
+    int8_t j = limit;
+
+    // Output must be ordered by k, ascending.
+    FloatType k = -3.0;
+    for (size_t index = 0; index != size; ++index)
+    {
+        auto& a = result[index];
+        std::get<0>(a) = k;
+        std::get<0>(std::get<1>(a)) = i;
+        std::get<1>(std::get<1>(a)) = j;
+
+        if (k + 1.0 < inc / -2)
+        {
+            j--;
+            if (j < -limit) j = -limit;
+        }
+        else if (k - 1.0 < inc / -2)
+        {
+            i--;
+            if (i < -limit) i = -limit;
+        }
+        else
+        {
+            j++;
+            if (j > limit) j = limit;
+        }
+        k += inc;
     }
     return result;
 }
@@ -51,20 +92,22 @@ inline int from_4fsk(int symbol)
     }
 }
 
-#if 0
-inline std::pair<int8_t, int8_t> 4fsk_demod(int symbol)
+template <typename FloatType, size_t LLR>
+auto llr(FloatType sample)
 {
-    // Convert a 4-FSK symbol to a pair of bits.
-    switch (symbol)
-    {
-        case 1: return std::pair<int8_t, int8_t>(0,0);
-        case 3: return std::pair<int8_t, int8_t>(0,1);
-        case -1: return std::pair<int8_t, int8_t>(1,0);
-        case -3: return std::pair<int8_t, int8_t>(1,1);
-        default: abort();
-    }
+    static constexpr auto symbol_map = detail::make_llr_map<FloatType, LLR>();
+
+    FloatType s = std::min(3.0, std::max(-3.0, sample));
+
+    auto it = std::lower_bound(symbol_map.begin(), symbol_map.end(), s,
+        [](std::tuple<FloatType, std::tuple<int8_t, int8_t>> const& e, FloatType s){
+            return std::get<0>(e) < s;
+        });
+    
+    if (it == symbol_map.end()) return std::get<1>(*symbol_map.rbegin());
+
+    return std::get<1>(*it);
 }
-#endif 
 
 template <size_t M, typename T, size_t N, typename U, size_t IN>
 auto depunctured(std::array<T, N> puncture_matrix, std::array<U, IN> in)
