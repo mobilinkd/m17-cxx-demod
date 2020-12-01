@@ -160,7 +160,7 @@ struct Viterbi
         // Find starting point. Should be 0 for properly flushed CCs.
         size_t min_element = 0;
         int32_t min_cost = prevMetrics[0];
-        size_t ber = min_cost / (2 * ((1 << (LLR_ - 1)) - 1));
+
         for (size_t i = 0; i != NumStates; ++i)
         {
             if (prevMetrics[i] < min_cost)
@@ -169,6 +169,8 @@ struct Viterbi
                 min_element = i;
             }
         }
+
+        size_t ber = min_cost / (2 * ((1 << (LLR_ - 1)) - 1));
 
         // Do chainback.
         auto oit = std::rbegin(out);
