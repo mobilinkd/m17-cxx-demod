@@ -41,10 +41,12 @@ struct SymbolEvm
         symbol_t symbol;
         FloatType evm;
 
+        sample = std::min(3.0, std::max(-3.0, sample));
+
         if (sample > 2)
         {
             symbol = 3;
-            evm = sample - 3;
+            evm = (sample - 3) * 0.333333;
         }
         else if (sample > 0)
         {
@@ -59,7 +61,7 @@ struct SymbolEvm
         else
         {
             symbol = -3;
-            evm = sample + 3;
+            evm = (sample + 3) * 0.333333;
         }
 
         if (erasure_limit_ and (abs(evm) > *erasure_limit_)) symbol = 0;
