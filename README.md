@@ -22,11 +22,17 @@ This code requires the codec2-devel package be installed.
 
 This program was designed to be used with RTL-SDR, specifically rtl-fm.
 
-    rtl_fm -f 144.91M -s 48k | ./m17-demod | play -b 16 -r 8000 -c1 -t s16 -
+
+    rtl_fm -E offset -f 144.91M -s 48k | m17-demod | play -b 16 -r 8000 -c1 -t s16 -
 
 Note that the oscillators on the PlutoSDR and on most RTL-SDR dongles are
 rather inaccurate.  You will need to have both tuned to the same frequency,
 correcting for clock inaccuracies on one or both devices.
+
+Also note that I need to use `-E offset` to decode the data well, even though
+I see this in the `rtl_fm` output:
+
+    WARNING: Failed to set offset tuning.
 
 This was tested using the [m17-gnuradio](https://github.com/mobilinkd/m17-gnuradio)
 GNU Radio block feeding an Analog Devices 
