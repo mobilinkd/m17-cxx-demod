@@ -19,3 +19,6 @@ pkg_check_modules(CODEC2 REQUIRED codec2)
 add_executable(m17-demod m17-demod.cpp)
 target_link_libraries(m17-demod ${CODEC2_LIBRARIES})
 install(TARGETS m17-demod DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+enable_testing ()
+add_subdirectory (tests)
