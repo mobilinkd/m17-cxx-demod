@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <tuple>
+#include <stdlib.h>
 
 namespace mobilinkd
 {
