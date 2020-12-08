@@ -50,7 +50,7 @@ int main(int argc, char* argv[])
     auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.6);
     auto sync1 = M17Synchronizer(0x3243, 1);
     auto sync4 = M17Synchronizer(0x3243, 4);
-    auto framer = M17Framer();
+    auto framer = M17Framer<>();
     auto decoder = M17FrameDecoder();
 
     int count = 0;
