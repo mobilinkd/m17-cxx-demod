@@ -4,8 +4,8 @@
 
 #include <array>
 #include <cstdint>
+#include <cstddef>
 #include <tuple>
-#include <stdlib.h>
 
 namespace mobilinkd
 {
