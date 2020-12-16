@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <tuple>
 
 namespace mobilinkd
 {
