@@ -39,7 +39,7 @@ struct PhaseEstimator
     {
         assert(dx_ > 0.0);
        
-        auto ratio = ((samples.at(2) - samples.at(0)) / 3) / dx_;
+        auto ratio = ((samples.at(2) - samples.at(0)) / 3.0) / dx_;
         // Clamp +/-5.
         ratio = std::min(FloatType(5.0), ratio);
         ratio = std::max(FloatType(-5.0), ratio);
