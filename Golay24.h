@@ -124,9 +124,10 @@ constexpr uint64_t makeSME(uint64_t syndrome, uint32_t bits)
     return (syndrome << 24) | (bits & 0xFFFFFF);
 }
 
-constexpr std::array<SyndromeMapEntry, 2048> make_lut()
+constexpr size_t LUT_SIZE = 2048;
+
+constexpr std::array<SyndromeMapEntry, LUT_SIZE> make_lut()
 {
-    constexpr size_t LUT_SIZE = 2048;
     constexpr size_t VECLEN=23;
     detail::array<uint64_t, LUT_SIZE> result{};
 
