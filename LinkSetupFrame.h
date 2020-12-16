@@ -74,7 +74,7 @@ struct LinkSetupFrame
     {
         static const char callsign_map[] = "xABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.";
 
-        uint64_t encoded;       // This only works on little endian architectures.
+        uint64_t encoded = 0;       // This only works on little endian architectures.
         auto p = reinterpret_cast<uint8_t*>(&encoded);
         std::copy(callsign.begin(), callsign.end(), p);
 
