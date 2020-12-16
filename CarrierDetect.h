@@ -32,7 +32,7 @@ struct CarrierDetect
     {
         auto filtered = filter_(std::abs(value));
         if (locked_ & filtered > unlock_) locked_ = false;
-        else if (!locked_ & filtered < lock_) locked_ = true;
+        else if (!locked_ && (filtered < lock_)) locked_ = true;
 
         return std::make_tuple(locked_, filtered);
     }
