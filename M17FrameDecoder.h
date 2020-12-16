@@ -79,11 +79,11 @@ struct M17FrameDecoder
         std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
         std::cerr << ", TOCALL: ";
         for (auto x : encoded_call) if (x) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(x);
-        uint16_t type = lsf[12] << 8 + lsf[13];
+        uint16_t type = (lsf[12] << 8) | lsf[13];
         std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
         std::cerr << ", NONCE: ";
         for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
-        uint16_t crc = lsf[28] << 8 + lsf[29];
+        uint16_t crc = (lsf[28] << 8) | lsf[29];
         std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
         std::cerr << std::dec << std::endl;
     }
