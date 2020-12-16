@@ -58,7 +58,8 @@ struct Fsk4Demod
 
     double sample_rate = 48000;
     double symbol_rate = 4800;
-    double gain = 0.04;
+    double unlock_gain = 0.02;
+    double lock_gain = 0.001;
     std::array<double, 3> samples{0};
     double t = 0;
     double dt = symbol_rate / sample_rate;
@@ -68,17 +69,18 @@ struct Fsk4Demod
     double estimated_frequency_offset = 0.0;
     double evm_average = 0.0;
 
-    Fsk4Demod(double sample_rate, double symbol_rate, double gain = 0.04)
+    Fsk4Demod(double sample_rate, double symbol_rate, double unlock_gain = 0.02, double lock_gain = 0.001)
     : sample_rate(sample_rate)
     , symbol_rate(symbol_rate)
-    , gain(gain * symbol_rate / sample_rate)
+    , unlock_gain(unlock_gain * symbol_rate / sample_rate)
+    , lock_gain(lock_gain * symbol_rate / sample_rate)
     , dt(symbol_rate / sample_rate)
     , ideal_dt(dt)
     {
         samples.fill(0.0);
     }
     
-    demod_result_t demod()
+    demod_result_t demod(bool lock)
     {
         estimated_deviation = deviation(samples[1]);
         for (auto& sample : samples) sample *= estimated_deviation;
@@ -89,7 +91,7 @@ struct Fsk4Demod
         auto phase_estimate = phase(samples);
         if (samples[1] < 0) phase_estimate *= -1;
         
-        dt = ideal_dt - (phase_estimate * gain);
+        dt = ideal_dt - (phase_estimate * (lock ? lock_gain : unlock_gain));
         t += dt;
         
         auto [symbol, evm] = symbol_evm(samples[1]);
@@ -105,7 +107,7 @@ struct Fsk4Demod
      * symbol, the EVM, the deviation error and the frequency error
      * (sample, phase, symbol, evm, ed, ef), otherwise None.
      */
-    result_t operator()(double sample)
+    result_t operator()(double sample, bool lock)
     {
         auto filtered_sample = rrc(sample);
 
@@ -113,7 +115,7 @@ struct Fsk4Demod
         {
             samples[2] = filtered_sample;
             sample_now = false;
-            auto [prev_sample, phase_estimate, symbol, evm] = demod();
+            auto [prev_sample, phase_estimate, symbol, evm] = demod(lock);
             return std::make_tuple(prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evm_average);
         }
             

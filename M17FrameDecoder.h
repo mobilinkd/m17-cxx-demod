@@ -8,6 +8,7 @@
 #include "Viterbi.h"
 #include "CRC16.h"
 #include "LinkSetupFrame.h"
+#include "Golay24.h"
 
 #include <codec2/codec2.h>
 
@@ -45,6 +46,9 @@ struct M17FrameDecoder
     
     link_setup_callback_t link_setup_callback_;
     audio_callback_t audio_callback_;
+    lsf_buffer_t lsf_output;
+    std::array<int8_t, 6> lich_buffer;
+    uint8_t lich_segments{0};       ///< one bit per received LICH fragment.
 
     struct CODEC2 *codec2;
 
@@ -65,33 +69,48 @@ struct M17FrameDecoder
 
     void reset() { state_ = State::LS_FRAME; }
 
-    size_t decode_lsf(buffer_t& buffer)
+    void dump_lsf(const lsf_buffer_t& lsf)
+    {
+        LinkSetupFrame::encoded_call_t encoded_call;
+        std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
+        auto mycall = LinkSetupFrame::decode_callsign(encoded_call);
+        std::cerr << "\nMYCALL: ";
+        for (auto x : mycall) if (x) std::cerr << x;
+        std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
+        std::cerr << ", TOCALL: ";
+        for (auto x : encoded_call) if (x) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(x);
+        uint16_t type = lsf[12] << 8 + lsf[13];
+        std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
+        std::cerr << ", NONCE: ";
+        for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
+        uint16_t crc = lsf[28] << 8 + lsf[29];
+        std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
+        std::cerr << std::dec << std::endl;
+    }
+
+    bool decode_lsf(buffer_t& buffer, size_t& ber)
     {
         std::array<uint8_t, 240> output;
         auto dp = depunctured<488>(P1, buffer);
         // std::cerr << std::endl;
         // for (auto i : dp) std::cerr << int(i) << ", ";
         // std::cerr << std::endl;
-        auto ber = viterbi_.decode(dp, output);
-        ber = ber > 60 ? ber - 60 : 0;
+        ber = viterbi_.decode(dp, output) - 120;
         auto lsf = to_byte_array(output);
         crc_.reset();
         for (auto x : lsf) crc_(x);
         auto checksum = crc_.get();
-        if (checksum == 0) state_ = State::AUDIO;
-        else
+        if (checksum != 0) 
         {
             // std::cerr << "\nLSF checksum failure." << std::endl;
+            lsf_output.fill(0);
             state_ = State::LS_LICH;
-            return ber;
+            return false;
         }
-        LinkSetupFrame::encoded_call_t encoded_call;
-        std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
-        auto mycall = LinkSetupFrame::decode_callsign(encoded_call);
-        std::cerr << "\nCALL SIGN: ";
-        for (auto x : mycall) if (x) std::cerr << x;
-        std::cerr << std::endl;
-        return ber;
+
+        state_ = State::AUDIO;
+        dump_lsf(lsf);
+        return true;
     }
 
     void demodulate_audio(audio_buffer_t audio)
@@ -103,14 +122,13 @@ struct M17FrameDecoder
         std::cout.write((const char*)buf.begin(), 320);
     }
 
-    size_t decode_audio(buffer_t& buffer)
+    bool decode_audio(buffer_t& buffer, size_t& ber)
     {
         std::array<int8_t, 272> tmp;
         std::copy(buffer.begin() + 96, buffer.end(), tmp.begin());
         std::array<uint8_t, 160> output;
         auto dp = depunctured<328>(P2, tmp);
-        auto ber = viterbi_.decode(dp, output);
-        ber = ber > 28 ? ber - 28 : 0;
+        ber = viterbi_.decode(dp, output) - 56;
         auto audio = to_byte_array(output);
         crc_.reset();
         for (auto x : audio) crc_(x);
@@ -121,28 +139,90 @@ struct M17FrameDecoder
         {
             state_ = State::LS_FRAME;
         }
-        return ber;
+        return true;
     }
 
-    size_t operator()(buffer_t& buffer)
+    // Unpack  & decode LICH fragments into tmp_buffer.
+    bool unpack_lich(buffer_t& buffer)
+    {
+        size_t index = 0;
+        // Read the 4 24-bit codewords from LICH
+        for (size_t i = 0; i != 4; ++i) // for each codeword
+        {
+            uint32_t codeword = 0;
+            for (size_t j = 0; j != 24; ++j) // for each bit in codeword
+            {
+                codeword <<= 1;
+                codeword |= (buffer[i * 24 + j] > 0);
+            }
+            uint32_t decoded = 0;
+            if (!Golay24::decode(codeword, decoded))
+            {
+                return false;
+            }
+            decoded >>= 12; // Remove check bits and parity.
+            // append codeword.
+            if (i & 1)
+            {
+                lich_buffer[index++] |= (decoded >> 8);     // upper 4 bits
+                lich_buffer[index++] = (decoded & 0xFF);    // lower 8 bits
+            }
+            else
+            {
+                lich_buffer[index++] |= (decoded >> 4);     // upper 8 bits
+                lich_buffer[index] = (decoded & 0x0F) << 4; // lower 4 bits
+            }
+        }
+        return true;
+    }
+
+    bool decode_lich(buffer_t& buffer, size_t& ber)
+    {
+        lich_buffer.fill(0);
+        // Read the 4 12-bit codewords from LICH into tmp_buffer.
+        if (!unpack_lich(buffer)) return false;
+
+        uint8_t fragment_number = lich_buffer[5];   // Get fragment number.
+        fragment_number >>= 5;
+
+        // Copy decoded LICH to superframe buffer.
+        std::copy(lich_buffer.begin(), lich_buffer.begin() + 5,
+            lsf_output.begin() + (fragment_number * 5));
+
+        lich_segments |= (1 << fragment_number);        // Indicate segment received.
+        if (lich_segments != 0x3F) return false;        // More to go...
+
+        crc_.reset();
+        for (auto x : lsf_output) crc_(x);
+        auto it = lsf_output.begin();
+        auto checksum = crc_.get();
+        if (checksum == 0)
+        {
+            state_ = State::AUDIO;
+            dump_lsf(lsf_output);
+            return true;
+        }
+        // Failed CRC... try again.
+        lich_segments = 0;
+        lsf_output.fill(0);
+        return false;
+    }
+
+    bool operator()(buffer_t& buffer, size_t& ber)
     {
         derandomize_(buffer);
         interleaver_.deinterleave(buffer);
-        size_t ber = 1000;
-
+ 
         switch(state_)
         {
         case State::LS_FRAME:
-            ber = decode_lsf(buffer);
-            break;
+            return decode_lsf(buffer, ber);
         case State::LS_LICH:
-            state_ = State::LS_FRAME;
-            break;
+            return decode_lich(buffer, ber);
         case State::AUDIO:
-            ber = decode_audio(buffer);
-            break;
+             return decode_audio(buffer, ber);
         }
-        return ber;
+        return false;
     }
 };
 

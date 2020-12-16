@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
 
-    auto demod = Fsk4Demod(48000.0, 4800.0, 0.005);
+    auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0005);
     auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.6);
     auto sync1 = M17Synchronizer(0x3243, 1);
     auto sync4 = M17Synchronizer(0x3243, 4);
@@ -54,17 +54,19 @@ int main(int argc, char* argv[])
     auto decoder = M17FrameDecoder();
 
     int count = 0;
-    enum class State { UNLOCKED, SYNCHING, FR_SYNC, FRAMING};
+    enum class State { UNLOCKED, SYNC, FR_SYNC, FRAMING};
     State state = State::UNLOCKED;
     int8_t* frame;
     alignas(16) std::array<int8_t, framer.size()> buffer;
-    uint32_t ber = 0;
+    size_t ber = 0;
+    size_t sync_count = 0;
+    bool locked_ = false;
 
     while (std::cin)
     {
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
-        auto result = demod(sample / 5600.0);
+        auto result = demod(sample / 5600.0, locked_);
         if (result)
         {
             auto [prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evma] = *result;
@@ -73,13 +75,17 @@ int main(int argc, char* argv[])
             switch (state)
             {
             case State::UNLOCKED:
-                if (!locked) break;
-                state = State::SYNCHING;
+                if (!locked)
+                {
+                    locked_ = false;
+                    break;
+                }
+                state = State::SYNC;
                 framer.reset();
                 decoder.reset();
                 ber = 1000;
                 // Fall-through
-            case State::SYNCHING:
+            case State::SYNC:
                 if (!locked)
                 {
                     state = State::UNLOCKED;
@@ -88,41 +94,48 @@ int main(int argc, char* argv[])
                 {
                     state = State::FRAMING;
                 }
-                else
-                {
-                    // pass
-                }
                 break;
             case State::FR_SYNC:
                 if (!locked)
                 {
                     state = State::UNLOCKED;
+                    std::cerr << "\rstate: " << int(state)
+                        << ", evm: " << std::setprecision(2) << std::setw(8) << evma
+                        << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
+                        << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
+                        << ", locked: " << std::boolalpha << std::setw(6) << locked
+                        << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
+                        << ", ber: " << ber << "         "  << std::endl;
                 }
-                else if (sync4(from_4fsk(symbol)))
+                else if (sync4(from_4fsk(symbol)) && sync_count == 7)
                 {
                     state = State::FRAMING;
                 }
-                else
+                else if (++sync_count == 8)
                 {
-                    // pass
+                    state = State::UNLOCKED;
+                    locked_ = false;
+                    std::cerr << "\nsync count!" << std::endl;
+                    std::cerr << "\rstate: " << int(state)
+                        << ", evm: " << std::setprecision(2) << std::setw(8) << evma
+                        << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
+                        << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
+                        << ", locked: " << std::boolalpha << std::setw(6) << locked
+                        << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
+                        << ", ber: " << ber << "         "  << std::endl;
                 }
                 break;
             case State::FRAMING:
                 {
-                    if (!locked)
+                    locked_ = true;
+                    auto n = llr<double, 4>(prev_sample);
+                    auto len = framer(n, &frame);
+                    if (len != 0)
                     {
-                        state = State::UNLOCKED;
-                    }
-                    else
-                    {
-                        auto n = llr<double, 4>(prev_sample);
-                        auto len = framer(n, &frame);
-                        if (len != 0)
-                        {
-                            state = State::FR_SYNC;
-                            std::copy(frame, frame + len, buffer.begin());
-                            ber = decoder(buffer);
-                        }
+                        state = State::FR_SYNC;
+                        sync_count = 0;
+                        std::copy(frame, frame + len, buffer.begin());
+                        decoder(buffer, ber);
                     }
                 }
                 break;
