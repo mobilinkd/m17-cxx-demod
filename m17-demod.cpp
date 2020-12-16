@@ -42,10 +42,20 @@ const auto rrc_taps = std::experimental::make_array<double>(
 const auto evm_b = std::experimental::make_array<double>(0.02008337, 0.04016673, 0.02008337);
 const auto evm_a = std::experimental::make_array<double>(1.0, -1.56101808, 0.64135154);
 
+bool display_lsf = false;
+
 int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
+    using namespace std::string_literals;
 
+    bool display_diags = false;
+    for (size_t i = 1; i != argc; ++i)
+    {
+        if (argv[i] == "-d"s) display_diags = true;
+        if (argv[i] == "-l"s) display_lsf = true;
+    }
+    
     auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0005);
     auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.6);
     auto sync1 = M17Synchronizer(0x3243, 1);
@@ -99,13 +109,6 @@ int main(int argc, char* argv[])
                 if (!locked)
                 {
                     state = State::UNLOCKED;
-                    std::cerr << "\rstate: " << int(state)
-                        << ", evm: " << std::setprecision(2) << std::setw(8) << evma
-                        << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
-                        << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
-                        << ", locked: " << std::boolalpha << std::setw(6) << locked
-                        << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
-                        << ", ber: " << ber << "         "  << std::endl;
                 }
                 else if (sync4(from_4fsk(symbol)) && sync_count == 7)
                 {
@@ -115,14 +118,6 @@ int main(int argc, char* argv[])
                 {
                     state = State::UNLOCKED;
                     locked_ = false;
-                    std::cerr << "\nsync count!" << std::endl;
-                    std::cerr << "\rstate: " << int(state)
-                        << ", evm: " << std::setprecision(2) << std::setw(8) << evma
-                        << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
-                        << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
-                        << ", locked: " << std::boolalpha << std::setw(6) << locked
-                        << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
-                        << ", ber: " << ber << "         "  << std::endl;
                 }
                 break;
             case State::FRAMING:
@@ -143,7 +138,7 @@ int main(int argc, char* argv[])
 
             if ((count++ % 192) == 0)
             {
-                std::cerr << "\rstate: " << int(state)
+                if (display_diags) std::cerr << "\rstate: " << int(state)
                     << ", evm: " << std::setprecision(2) << std::setw(8) << evma
                     << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
                     << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset

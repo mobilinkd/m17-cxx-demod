@@ -10,7 +10,13 @@ running.
 
 ## Build
 
-This code requires the codec2-devel package be installed.
+### Prerequisites
+
+This code requires the codec2-devel and gtest-devel packages be installed.
+
+It also requires a modern C++17 compiler (GCC 8 minimum).
+
+### Build Steps
 
     mkdir build
     cd build
@@ -22,8 +28,17 @@ This code requires the codec2-devel package be installed.
 
 This program was designed to be used with RTL-SDR, specifically rtl-fm.
 
+    rtl_fm -E offset -f 144.91M -s 48k | m17-demod -l | play -b 16 -r 8000 -c1 -t s16 -
 
-    rtl_fm -E offset -f 144.91M -s 48k | m17-demod | play -b 16 -r 8000 -c1 -t s16 -
+You should run this in a terminal window that is 132 characters wide. It
+will output diagnostic information on a single line in the window.
+
+### Command Line Options
+
+There are two command line options that determine the diagnostic output.
+
+    -d causes demodulator diagnosts to be streamed to the terminal on STDERR.
+    -l causes the link setup frame information (either from the first frame or LICH) to be displayed.
 
 Note that the oscillators on the PlutoSDR and on most RTL-SDR dongles are
 rather inaccurate.  You will need to have both tuned to the same frequency,

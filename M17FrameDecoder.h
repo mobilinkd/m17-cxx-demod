@@ -18,6 +18,8 @@
 #include <iostream>
 #include <iomanip>
 
+extern bool display_lsf;
+
 namespace mobilinkd
 {
 
@@ -109,7 +111,7 @@ struct M17FrameDecoder
         }
 
         state_ = State::AUDIO;
-        dump_lsf(lsf);
+        if (display_lsf) dump_lsf(lsf);
         return true;
     }
 
@@ -199,7 +201,7 @@ struct M17FrameDecoder
         if (checksum == 0)
         {
             state_ = State::AUDIO;
-            dump_lsf(lsf_output);
+            if (display_lsf) dump_lsf(lsf_output);
             return true;
         }
         // Failed CRC... try again.
