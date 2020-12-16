@@ -153,8 +153,8 @@ struct Viterbi
             }
             std::swap(currMetrics, prevMetrics);
             hindex += 1;
-            // for (size_t i = 0; i != NumStates; ++i) std::cout << std::setw(5) << prevMetrics[i] << ",";
-            // std::cout << std::endl;
+            // for (size_t i = 0; i != NumStates; ++i) std::cerr << std::setw(5) << prevMetrics[i] << ",";
+            // std::cerr << std::endl;
         }
 
         // Find starting point. Should be 0 for properly flushed CCs.
@@ -170,7 +170,7 @@ struct Viterbi
             }
         }
 
-        size_t ber = min_cost / (2 * ((1 << (LLR_ - 1)) - 1));
+        size_t ber = min_cost / (METRIC >> 2); // Cost is at least equal to # of erasures.
 
         // Do chainback.
         auto oit = std::rbegin(out);
