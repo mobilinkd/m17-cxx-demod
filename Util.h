@@ -154,6 +154,27 @@ size_t depuncture(const std::array<int8_t, IN>& in,
     return bit_count;
 }
 
+
+template <size_t IN, size_t OUT, size_t P>
+size_t puncture(const std::array<uint8_t, IN>& in,
+    std::array<int8_t, OUT>& out, const std::array<int8_t, P>& p)
+{
+    size_t index = 0;
+    size_t pindex = 0;
+    size_t bit_count = 0;
+    for (size_t i = 0; i != IN && index != OUT; ++i)
+    {
+        if (p[pindex++])
+        {
+            out[index++] = in[i];
+            bit_count++;
+        }
+
+        if (pindex == P) pindex = 0;
+    }
+    return bit_count;
+}
+
 /**
  * Sign-extend an n-bit value to a specific signed integer type.
  */

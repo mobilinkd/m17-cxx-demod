@@ -124,7 +124,8 @@ struct Viterbi
             {
                 int16_t c = std::abs(cost_[j][0] - s0) + std::abs(cost_[j][1] - s1);
                 cost0[j] = c;
-                cost1[j] = METRIC - c;
+                // cost1[j] = METRIC - c;
+                cost1[j] = std::abs(cost_[j][0] + s0) + std::abs(cost_[j][1] + s1);
             }
             
             for (size_t j = 0; j != BUTTERFLY_SIZE; ++j)
@@ -170,7 +171,7 @@ struct Viterbi
             }
         }
 
-        size_t ber = min_cost / (METRIC >> 2); // Cost is at least equal to # of erasures.
+        size_t ber = min_cost / (METRIC >> 1); // Cost is at least equal to # of erasures.
 
         // Do chainback.
         auto oit = std::rbegin(out);

@@ -1,5 +1,5 @@
 # m17-cxx-demod
-M17 Demodulator in C++ (GPL)
+M17 Modulator & Demodulator in C++ (GPL)
 
 This program reads a 48K SPS 16-bit, little-endian, single channel, M17  4-FSK
 baseband input stream from STDIN and writes a demodulated/decoded 8K SPS
@@ -12,7 +12,7 @@ running.
 
 ### Prerequisites
 
-This code requires the codec2-devel and gtest-devel packages be installed.
+This code requires the codec2-devel, boost-devel and gtest-devel packages be installed.
 
 It also requires a modern C++17 compiler (GCC 8 minimum).
 
@@ -33,9 +33,21 @@ This program was designed to be used with RTL-SDR, specifically rtl-fm.
 You should run this in a terminal window that is 132 characters wide. It
 will output diagnostic information on a single line in the window.
 
+## Testing the Modulator
+
+    sox ~/m17-demodulator/brain.wav -t raw - |  ./m17-mod -S WX9O | ./m17-demod -l -d | play -q -b 16 -r 8000 -c1 -t s16 -
+
+The input audio stream must be 1 channel, 16-bit, 8000 samples per second.
+
+Use `-S <callsign>` to set your source (callsign).
+
+Use `-b` to output a bitstream rather than baseband.
+
+Use `-h` to see the full help.  Many of the options do not yet work.
+
 ### Command Line Options
 
-There are two command line options that determine the diagnostic output.
+There are two command line options for the demodulator that determine the diagnostic output.
 
     -d causes demodulator diagnosts to be streamed to the terminal on STDERR.
     -l causes the link setup frame information (either from the first frame or LICH) to be displayed.

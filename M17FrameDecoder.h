@@ -97,7 +97,7 @@ struct M17FrameDecoder
         // std::cerr << std::endl;
         // for (auto i : dp) std::cerr << int(i) << ", ";
         // std::cerr << std::endl;
-        ber = viterbi_.decode(dp, output) - 120;
+        ber = viterbi_.decode(dp, output) - 60;
         auto lsf = to_byte_array(output);
         crc_.reset();
         for (auto x : lsf) crc_(x);
@@ -130,7 +130,7 @@ struct M17FrameDecoder
         std::copy(buffer.begin() + 96, buffer.end(), tmp.begin());
         std::array<uint8_t, 160> output;
         auto dp = depunctured<328>(P2, tmp);
-        ber = viterbi_.decode(dp, output) - 56;
+        ber = viterbi_.decode(dp, output) - 28;
         auto audio = to_byte_array(output);
         crc_.reset();
         for (auto x : audio) crc_(x);

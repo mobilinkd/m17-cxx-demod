@@ -138,8 +138,8 @@ int main(int argc, char* argv[])
 
             if ((count++ % 192) == 0)
             {
-                if (display_diags) std::cerr << "\rstate: " << int(state)
-                    << ", evm: " << std::setprecision(2) << std::setw(8) << evma
+                if (display_diags) std::cerr << "\rstate: " << std::setw(1) << int(state)
+                    << ", evm: " << std::setfill(' ') << std::setprecision(2) << std::setw(8) << evma
                     << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
                     << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
                     << ", locked: " << std::boolalpha << std::setw(6) << locked

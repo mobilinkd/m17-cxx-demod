@@ -25,3 +25,7 @@ gtest_add_tests(ViterbiTest "" AUTO)
 add_executable (Golay24Test Golay24Test.cpp)
 target_link_libraries(Golay24Test gtest pthread)
 gtest_add_tests(Golay24Test "" AUTO)
+
+add_executable (CRC16Test CRC16Test.cpp)
+target_link_libraries(CRC16Test gtest pthread)
+gtest_add_tests(CRC16Test "" AUTO)

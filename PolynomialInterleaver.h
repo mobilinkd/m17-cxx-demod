@@ -8,7 +8,7 @@
 namespace mobilinkd
 {
 
-template <size_t F1= 45, size_t F2 = 92, size_t K= 368>
+template <size_t F1= 45, size_t F2 = 92, size_t K = 368>
 struct PolynomialInterleaver
 {
     using buffer_t = std::array<int8_t, K>;

@@ -47,6 +47,14 @@ struct M17Randomizer
         }
     }
 
+    void randomize(std::array<int8_t, N>& frame)
+    {
+        for (size_t i = 0; i != N; ++i)
+        {
+            frame[i] ^= (dc_[i] == -1);
+        }
+    }
+
 };
 
 } // mobilinkd
