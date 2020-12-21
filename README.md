@@ -45,6 +45,14 @@ Use `-b` to output a bitstream rather than baseband.
 
 Use `-h` to see the full help.  Many of the options do not yet work.
 
+To output a bitstream file:
+
+    sox ~/m17-demodulator/brain.wav -t raw - | ./m17-mod -S WX9O -b > m17.bin
+
+This bitstream file can be fed into [m17-gnuradio](https://github.com/mobilinkd/m17-gnuradio) to
+transmit M17 using a PlutoSDR (or any SDR with an appropriate GNU Radio sink), or loaded into
+a vector signal generator such as an ESG-D Series signal generator.
+
 ### Command Line Options
 
 There are two command line options for the demodulator that determine the diagnostic output.
