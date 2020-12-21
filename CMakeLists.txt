@@ -28,7 +28,7 @@ install(TARGETS m17-demod DESTINATION ${CMAKE_INSTALL_BINDIR})
 add_executable(m17-mod m17-mod.cpp)
 target_link_libraries(m17-mod PRIVATE ${CODEC2_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(m17-mod PRIVATE Threads::Threads)
-install(TARGETS m17-demod DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS m17-mod DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 enable_testing ()
 add_subdirectory (tests)
