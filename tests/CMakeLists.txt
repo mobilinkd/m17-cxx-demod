@@ -29,3 +29,15 @@ gtest_add_tests(Golay24Test "" AUTO)
 add_executable (CRC16Test CRC16Test.cpp)
 target_link_libraries(CRC16Test gtest pthread)
 gtest_add_tests(CRC16Test "" AUTO)
+
+add_executable (M17RandomizerTest M17RandomizerTest.cpp)
+target_link_libraries(M17RandomizerTest gtest pthread)
+gtest_add_tests(M17RandomizerTest "" AUTO)
+
+add_executable (PolynomialInterleaverTest PolynomialInterleaverTest.cpp)
+target_link_libraries(PolynomialInterleaverTest gtest pthread)
+gtest_add_tests(PolynomialInterleaverTest "" AUTO)
+
+add_executable (M17ModulatorTest M17ModulatorTest.cpp)
+target_link_libraries(M17ModulatorTest gtest pthread codec2)
+gtest_add_tests(M17ModulatorTest "" AUTO)

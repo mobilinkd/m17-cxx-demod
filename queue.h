@@ -111,7 +111,7 @@ public:
      * @note The return value me be false if either the timeout expires
      *  or the queue is closed.
      */
-    template<class Rep, class Period = std::ratio<1>> 
+    template<class Rep = int64_t, class Period = std::ratio<1>> 
     bool get(reference val, std::chrono::duration<Rep, Period> timeout = std::chrono::duration<Rep, Period>::max())
     {
         auto expiration = std::chrono::system_clock::now() + timeout;
@@ -130,7 +130,7 @@ public:
      * @note The return value me be false if either the timeout expires
      *  or the queue is closed.
      */
-    template<typename U, class Rep, class Period = std::ratio<1>> 
+    template<typename U, class Rep = int64_t, class Period = std::ratio<1>> 
     bool put(U&& val, std::chrono::duration<Rep, Period> timeout = std::chrono::duration<Rep, Period>::max())
     {
         // Get the queue mutex.
