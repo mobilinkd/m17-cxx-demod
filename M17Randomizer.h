@@ -4,6 +4,8 @@
 
 #include <array>
 #include <experimental/array>
+#include <cstdint>
+#include <cstddef>
 
 namespace mobilinkd
 {
