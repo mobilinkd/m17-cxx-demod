@@ -216,7 +216,7 @@ std::array<int16_t, 1920> symbols_to_baseband(std::array<int8_t, 192> symbols)
 
     for (auto& b : baseband)
     {
-        b = rrc(b) * 2.5;
+        b = rrc(b) * 25.0;
     }
     return baseband;
 }
@@ -526,7 +526,6 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     send_audio_frame(lich[lich_segment], data);
 }
 
-
 int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
@@ -561,3 +560,4 @@ int main(int argc, char* argv[])
 
     return EXIT_SUCCESS;
 }
+
