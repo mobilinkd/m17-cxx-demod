@@ -107,6 +107,9 @@ private:
     using frame_t = std::array<uint8_t, 46>;        // M17 frame (without sync word).
 
     static constexpr std::array<uint8_t, 2> SYNC_WORD = {0x32, 0x43};
+    static constexpr std::array<uint8_t, 2> LSF_SYNC_WORD = {0x55, 0xF7};
+    static constexpr std::array<uint8_t, 2> DATA_SYNC_WORD = {0xFF, 0x5D};
+
 
     std::shared_ptr<audio_queue_t> audio_queue_;        // Input queue.
     std::shared_ptr<bitstream_queue_t> bitstream_queue_;  // Output queue.
@@ -155,9 +158,9 @@ private:
         return result;
     }
 
-    void output_frame(const frame_t& frame)
+    void output_frame(std::array<uint8_t, 2> sync_word, const frame_t& frame)
     {
-        for (auto c : SYNC_WORD) bitstream_queue_->put(c);
+        for (auto c : sync_word) bitstream_queue_->put(c);
         for (auto c : frame) bitstream_queue_->put(c);
     }
 
@@ -309,7 +312,7 @@ private:
 
         interleaver_.interleave(punctured);
         randomizer_(punctured);
-        output_frame(punctured);
+        output_frame(LSF_SYNC_WORD, punctured);
     }
 
     /**
@@ -326,7 +329,7 @@ private:
 
         interleaver_.interleave(temp);
         randomizer_(temp);
-        output_frame(temp);
+        output_frame(DATA_SYNC_WORD, temp);
     }
 
     /**
@@ -609,7 +612,7 @@ public:
 
         for (auto& b : baseband)
         {
-            b = rrc(b) * 2.5;
+            b = rrc(b) * 25;
         }
         return baseband;
     }

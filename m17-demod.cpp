@@ -58,8 +58,9 @@ int main(int argc, char* argv[])
     
     auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0005);
     auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.6);
-    auto sync1 = M17Synchronizer(0x3243, 1);
-    auto sync4 = M17Synchronizer(0x3243, 4);
+    auto sync1 = M17Synchronizer(0x55F7, 1);
+    auto sync2 = M17Synchronizer(0xFF5D, 1);
+    auto sync4 = M17Synchronizer(0xFF5D, 4);
     auto framer = M17Framer<>();
     auto decoder = M17FrameDecoder();
 
@@ -101,6 +102,10 @@ int main(int argc, char* argv[])
                     state = State::UNLOCKED;
                 }
                 else if (sync1(from_4fsk(symbol)))
+                {
+                    state = State::FRAMING;
+                }
+                else if (sync2(from_4fsk(symbol)))
                 {
                     state = State::FRAMING;
                 }

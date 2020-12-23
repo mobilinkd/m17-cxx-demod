@@ -12,6 +12,8 @@
 #include "Util.h"
 #include "Golay24.h"
 
+#include "M17Modulator.h"
+
 #include <codec2/codec2.h>
 
 #include <boost/program_options.hpp>
@@ -277,6 +279,9 @@ void send_preamble()
 }
 
 constexpr std::array<uint8_t, 2> SYNC_WORD = {0x32, 0x43};
+constexpr std::array<uint8_t, 2> LSF_SYNC_WORD = {0x55, 0xF7};
+constexpr std::array<uint8_t, 2> DATA_SYNC_WORD = {0xFF, 0x5D};
+
 
 lsf_t send_lsf(const std::string& src, const std::string& dest)
 {
@@ -346,7 +351,7 @@ lsf_t send_lsf(const std::string& src, const std::string& dest)
 
     interleaver.interleave(punctured);
     randomizer.randomize(punctured);
-    output_frame(SYNC_WORD, punctured);
+    output_frame(LSF_SYNC_WORD, punctured);
 
     return result;
 }
@@ -469,7 +474,7 @@ void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
 
     interleaver.interleave(temp);
     randomizer.randomize(temp);
-    output_frame(SYNC_WORD, temp);
+    output_frame(DATA_SYNC_WORD, temp);
 }
 
 void transmit(queue_t& queue, const lsf_t& lsf)
@@ -561,3 +566,75 @@ int main(int argc, char* argv[])
     return EXIT_SUCCESS;
 }
 
+#if 0
+int main(int argc, char* argv[])
+{
+    using namespace mobilinkd;
+    using namespace std::chrono_literals;
+
+    auto config = Config::parse(argc, argv);
+    if (!config) return 0;
+
+    signal(SIGINT, &signal_handler);
+
+    auto audio_queue = std::make_shared<M17Modulator::audio_queue_t>();
+    auto bitstream_queue = std::make_shared<M17Modulator::bitstream_queue_t>();
+
+    M17Modulator modulator(config->source_address, config->destination_address);
+    auto future = modulator.run(audio_queue, bitstream_queue);
+    modulator.ptt_on();
+
+    std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
+
+    M17Modulator::bitstream_t bitstream;
+    uint8_t bits;
+    size_t index = 0;
+
+    std::thread thd([&audio_queue](){
+        int16_t sample = 0;
+        while (running && std::cin)
+        {
+            std::cin.read(reinterpret_cast<char*>(&sample), 2);
+            audio_queue->put(sample);
+        }
+        running = false;
+    });
+
+    // Input must be 8000 SPS, 16-bit LE, 1 channel raw audio.
+    while (running)
+    {
+        if (!bitstream_queue->get(bits, 1s)) break;
+
+        if (config->bitstream)
+        {
+            std::cout << bits;
+            index += 1;
+            if (index == bitstream.size())
+            {
+                index == 0;
+                std::cout.flush();
+            }
+        }
+        else
+        {
+            bitstream[index++] = bits;
+            if (index == bitstream.size())
+            {
+                auto baseband = M17Modulator::symbols_to_baseband(M17Modulator::bytes_to_symbols(bitstream));
+                for (auto b : baseband) std::cout << uint8_t((b & 0xFF00) >> 8) << uint8_t(b & 0xFF);
+                std::cout.flush();
+            }
+        }
+    }
+
+    running = false;
+    modulator.ptt_off();
+    modulator.wait_until_idle();
+    thd.join();
+    audio_queue->close();
+    future.get();
+    bitstream_queue->close();
+
+    return EXIT_SUCCESS;
+}
+#endif
