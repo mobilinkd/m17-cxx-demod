@@ -76,7 +76,7 @@ int main(int argc, char* argv[])
     {
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
-        auto result = demod(sample / 5600.0, locked_);
+        auto result = demod(sample / 65536.0, locked_);
         if (result)
         {
             auto [prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evma] = *result;
@@ -140,7 +140,7 @@ int main(int argc, char* argv[])
             {
                 if (display_diags) std::cerr << "\rstate: " << std::setw(1) << int(state)
                     << ", evm: " << std::setfill(' ') << std::setprecision(2) << std::setw(8) << evma
-                    << ", deviation: " << std::setprecision(2) << std::setw(8) << estimated_deviation
+                    << ", deviation: " << std::setprecision(2) << std::setw(8) << (1.0 / estimated_deviation)
                     << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
                     << ", locked: " << std::boolalpha << std::setw(6) << locked
                     << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
