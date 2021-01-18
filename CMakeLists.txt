@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.9)
 
 project(m17-cxx-demod)
 enable_language(CXX)
@@ -30,5 +30,8 @@ target_link_libraries(m17-mod PRIVATE ${CODEC2_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(m17-mod PRIVATE Threads::Threads)
 install(TARGETS m17-mod DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-enable_testing ()
-add_subdirectory (tests)
+find_package(GTest)
+if(GTEST_FOUND)
+    enable_testing ()
+    add_subdirectory (tests)
+endif()
