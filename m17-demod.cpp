@@ -56,8 +56,8 @@ int main(int argc, char* argv[])
         if (argv[i] == "-l"s) display_lsf = true;
     }
     
-    auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0005);
-    auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.6);
+    auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0025);
+    auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.7);
     auto sync1 = M17Synchronizer(0x55F7, 1);
     auto sync2 = M17Synchronizer(0xFF5D, 1);
     auto sync4 = M17Synchronizer(0xFF5D, 4);
@@ -113,6 +113,7 @@ int main(int argc, char* argv[])
             case State::FR_SYNC:
                 if (!locked)
                 {
+                    std::cerr << "\nLost lock" << std::endl;
                     state = State::UNLOCKED;
                 }
                 else if (sync4(from_4fsk(symbol)) && sync_count == 7)
@@ -121,6 +122,7 @@ int main(int argc, char* argv[])
                 }
                 else if (++sync_count == 8)
                 {
+                    std::cerr << "\nLost frame sync " << std::hex << sync4.buffer_ << std::dec << std::endl;
                     state = State::UNLOCKED;
                     locked_ = false;
                 }
