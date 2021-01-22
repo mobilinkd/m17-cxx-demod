@@ -50,12 +50,12 @@ constexpr std::array<std::tuple<FloatType, std::tuple<int8_t, int8_t>>, (((1 << 
         std::get<0>(std::get<1>(a)) = i;
         std::get<1>(std::get<1>(a)) = j;
 
-        if (k + 1.0 < inc / -2)
+        if (k + 1.0 < inc / -2.0)
         {
             j--;
             if (j < -limit) j = -limit;
         }
-        else if (k - 1.0 < inc / -2)
+        else if (k - 1.0 < inc / -2.0)
         {
             i--;
             if (i < -limit) i = -limit;
@@ -179,7 +179,8 @@ template <size_t N>
 constexpr bool get_bit_index(const std::array<uint8_t, N>& input, size_t index)
 {
     auto byte_index = index >> 3;
-    auto bit_index = index & 7;
+    assert(byte_index < N);
+    auto bit_index = 7 - (index & 7);
 
     return (input[byte_index] & (1 << bit_index)) >> bit_index;
 }
@@ -188,7 +189,8 @@ template <size_t N>
 void set_bit_index(std::array<uint8_t, N>& input, size_t index)
 {
     auto byte_index = index >> 3;
-    auto bit_index = index & 7;
+    assert(byte_index < N);
+    auto bit_index = 7 - (index & 7);
     input[byte_index] |= (1 << bit_index);
 }
 
@@ -196,7 +198,8 @@ template <size_t N>
 void reset_bit_index(std::array<uint8_t, N>& input, size_t index)
 {
     auto byte_index = index >> 3;
-    auto bit_index = index & 7;
+    assert(byte_index < N);
+    auto bit_index = 7 - (index & 7);
     input[byte_index] &= ~(1 << bit_index);
 }
 
@@ -204,7 +207,7 @@ template <size_t N>
 void assign_bit_index(std::array<uint8_t, N>& input, size_t index, bool value)
 {
     if (value) set_bit_index(input, index);
-    else reset_bit_index(input, value);
+    else reset_bit_index(input, index);
 }
 
 
@@ -215,7 +218,7 @@ size_t puncture_bytes(const std::array<uint8_t, IN>& in,
     size_t index = 0;
     size_t pindex = 0;
     size_t bit_count = 0;
-    for (size_t i = 0; i != IN && index != OUT; ++i)
+    for (size_t i = 0; i != IN * 8 && index != OUT * 8; ++i)
     {
         if (p[pindex++])
         {
