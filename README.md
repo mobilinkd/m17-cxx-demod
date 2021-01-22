@@ -45,6 +45,8 @@ Use `-b` to output a bitstream rather than baseband.
 
 Use `-h` to see the full help.  Many of the options do not yet work.
 
+The output of the modulator is 48ksps, 16-bit, 1 channel raw audio.
+
 To output a bitstream file:
 
     sox ~/m17-demodulator/brain.wav -t raw - | ./m17-mod -S WX9O -b > m17.bin
