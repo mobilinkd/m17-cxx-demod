@@ -43,6 +43,7 @@ const auto evm_b = std::experimental::make_array<double>(0.02008337, 0.04016673,
 const auto evm_a = std::experimental::make_array<double>(1.0, -1.56101808, 0.64135154);
 
 bool display_lsf = false;
+bool invert_input = false;
 
 int main(int argc, char* argv[])
 {
@@ -54,6 +55,8 @@ int main(int argc, char* argv[])
     {
         if (argv[i] == "-d"s) display_diags = true;
         if (argv[i] == "-l"s) display_lsf = true;
+        if (argv[i] == "-i"s) invert_input = true;
+
     }
     
     auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0025);
@@ -77,6 +80,7 @@ int main(int argc, char* argv[])
     {
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
+        if (invert_input) sample *= -1;
         auto result = demod(sample / 65536.0, locked_);
         if (result)
         {

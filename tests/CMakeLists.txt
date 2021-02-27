@@ -41,3 +41,7 @@ gtest_add_tests(PolynomialInterleaverTest "" AUTO)
 add_executable (M17ModulatorTest M17ModulatorTest.cpp)
 target_link_libraries(M17ModulatorTest gtest pthread codec2)
 gtest_add_tests(M17ModulatorTest "" AUTO)
+
+add_executable (UtilTest UtilTest.cpp)
+target_link_libraries(UtilTest gtest pthread)
+gtest_add_tests(UtilTest "" AUTO)

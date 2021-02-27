@@ -105,6 +105,8 @@ struct M17FrameDecoder
         if (checksum != 0) 
         {
             // std::cerr << "\nLSF checksum failure." << std::endl;
+            // for (auto c : lsf) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(c);
+            // std::cerr << std::dec  << "BER = " << ber << std::endl;
             lsf_output.fill(0);
             state_ = State::LS_LICH;
             return false;
@@ -139,6 +141,7 @@ struct M17FrameDecoder
         uint16_t fn = (audio[0] << 8) | audio[1];
         if (checksum == 0 && fn > 0x7fff)
         {
+            std::cerr << "EOS" << std::endl; 
             state_ = State::LS_FRAME;
         }
         return true;
