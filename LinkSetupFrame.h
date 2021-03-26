@@ -74,14 +74,18 @@ struct LinkSetupFrame
     {
         static const char callsign_map[] = "xABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.";
 
-        uint64_t encoded = 0;       // This only works on little endian architectures.
-        auto p = reinterpret_cast<uint8_t*>(&encoded);
-        std::copy(callsign.begin(), callsign.end(), p);
+        uint64_t encoded = callsign[0];
 
         // decode each base-40 digit and map them to the appriate character.
         call_t result;
         result.fill(0);
         size_t index = 0;
+
+        for (int i=1; i<6; i++)
+        {
+			encoded = (encoded << 8) | callsign[i];
+        }
+
         while (encoded)
         {
             result[index++] = callsign_map[encoded % 40];
