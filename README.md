@@ -1,12 +1,18 @@
 # m17-cxx-demod
 M17 Modulator & Demodulator in C++ (GPL)
 
-This program reads a 48K SPS 16-bit, little-endian, single channel, M17  4-FSK
-baseband input stream from STDIN and writes a demodulated/decoded 8K SPS
-16-bit, single channel audio stream to STDOUT.
+## m17-cxx-demod
+This program reads a 48k samples per second 16-bit, little-endian, single
+channel, M17 4-FSK baseband stream from STDIN and writes a demodulated/decoded
+8k SPS 16-bit, single channel audio stream to STDOUT.
 
 Some diagnostic information is written to STDERR while the demodulator is
 running.
+
+## m17-cxx-mod
+This program reads in an 8k sample per second, 16-bit, 1 channel raw audio
+stream from STDIN and writes out an M17 4-FSK baseband stream at 48k SPS,
+16-bit, 1 channel to STDOUT.
 
 ## Build
 
@@ -22,6 +28,7 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
     cd build
     cmake ..
     make
+    make test
     sudo make install
 
 ## Running
@@ -77,10 +84,6 @@ GNU Radio block feeding an Analog Devices
 modulating the m17.bin file from the
 [m17-demodulator](https://github.com/mobilinkd/m17-demodulator) repo.
 
-## Notes
-
-As of now, this is using the older versions of the sync word and LICH
-encoding.  It is out of date with the current M17 spec.
 
 ## Thanks
 

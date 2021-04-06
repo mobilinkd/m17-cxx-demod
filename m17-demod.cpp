@@ -63,7 +63,7 @@ int main(int argc, char* argv[])
     auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.7);
     auto sync1 = M17Synchronizer(0x55F7, 1);
     auto sync2 = M17Synchronizer(0xFF5D, 1);
-    auto sync4 = M17Synchronizer(0xFF5D, 4);
+    auto sync4 = M17Synchronizer(0xFF5D, 3);
     auto framer = M17Framer<>();
     auto decoder = M17FrameDecoder();
 
@@ -74,6 +74,7 @@ int main(int argc, char* argv[])
     alignas(16) std::array<int8_t, framer.size()> buffer;
     size_t ber = 0;
     size_t sync_count = 0;
+    size_t lost_sync_count = 0;
     bool locked_ = false;
 
     while (std::cin)
@@ -108,6 +109,7 @@ int main(int argc, char* argv[])
                 else if (sync1(from_4fsk(symbol)))
                 {
                     state = State::FRAMING;
+                    lost_sync_count = 0;
                 }
                 else if (sync2(from_4fsk(symbol)))
                 {
@@ -123,12 +125,21 @@ int main(int argc, char* argv[])
                 else if (sync4(from_4fsk(symbol)) && sync_count == 7)
                 {
                     state = State::FRAMING;
+                    lost_sync_count = 0;
                 }
                 else if (++sync_count == 8)
                 {
-                    std::cerr << "\nLost frame sync " << std::hex << sync4.buffer_ << std::dec << std::endl;
-                    state = State::UNLOCKED;
-                    locked_ = false;
+                    if (++lost_sync_count == 4)
+                    {
+                        std::cerr << "\nLost frame sync " << std::hex << sync4.buffer_ << std::dec << std::endl;
+                        state = State::UNLOCKED;
+                        locked_ = false;
+                    }
+                    else
+                    {
+                        state = State::FRAMING;
+                    }
+                    
                 }
                 break;
             case State::FRAMING:
