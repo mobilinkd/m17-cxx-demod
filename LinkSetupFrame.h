@@ -22,8 +22,8 @@ struct LinkSetupFrame
     enum DataType { DT_RESERVED, DATA, VOICE, MIXED };
     enum EncType { NONE, AES, LFSR, ET_RESERVED };
 
-    call_t mycall_ = {0};
-    call_t tocall_ = {0};
+    call_t tocall_ = {0};   // Destination
+    call_t mycall_ = {0};   // Source
     TxType  tx_type_ = TxType::STREAM;
     DataType data_type_ = DataType::VOICE;
     EncType encryption_type_ = EncType::NONE;

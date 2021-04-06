@@ -76,10 +76,10 @@ struct M17FrameDecoder
         LinkSetupFrame::encoded_call_t encoded_call;
         std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
         auto mycall = LinkSetupFrame::decode_callsign(encoded_call);
-        std::cerr << "\nSRC: ";
+        std::cerr << "\nDEST: ";
         for (auto x : mycall) if (x) std::cerr << x;
         std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
-        std::cerr << ", DEST: ";
+        std::cerr << ", SRC: ";
         for (auto x : encoded_call) if (x) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(x);
         uint16_t type = (lsf[12] << 8) | lsf[13];
         std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
