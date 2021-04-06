@@ -33,6 +33,8 @@ private:
     std::condition_variable full_;
     std::condition_variable empty_;
     
+    queue(queue&) = delete;
+    queue& operator=(const queue&) = delete;
 
 public:
 
@@ -53,6 +55,9 @@ public:
     /// A pointer to an element stored in a Queue.
     using const_pointer = const value_type*;
     
+    queue()
+    {}
+
     /**
      * Get the next item in the queue.
      *
@@ -114,8 +119,33 @@ public:
     template<class Rep = int64_t, class Period = std::ratio<1>> 
     bool get(reference val, std::chrono::duration<Rep, Period> timeout = std::chrono::duration<Rep, Period>::max())
     {
-        auto expiration = std::chrono::system_clock::now() + timeout;
-        return get_until(val, expiration);
+        lock_type lock(mutex_);
+
+        while (queue_.empty())
+        {
+            if (State::CLOSED == state_)
+            {
+                return false;
+            }
+
+            if (empty_.wait_for(lock, timeout) == std::cv_status::timeout)
+            {
+                return false;
+            }
+        }
+
+        val = std::move(queue_.front());
+        queue_.pop_front();
+        size_ -= 1;
+
+        if (state_ == State::CLOSING && queue_.empty())
+        {
+            state_ == State::CLOSED;
+        }
+        
+        full_.notify_one();
+
+        return true;
     };
     
     /**

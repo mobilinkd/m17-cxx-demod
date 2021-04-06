@@ -308,7 +308,7 @@ private:
 
         std::array<uint8_t, 46> punctured;
         auto size = puncture_bytes(encoded, punctured, P1);
-        assert(size == 46);
+        assert(size == 368);
 
         interleaver_.interleave(punctured);
         randomizer_(punctured);
@@ -353,7 +353,7 @@ private:
 
         payload_t punctured;
         auto size = puncture_bytes(encoded, punctured, mobilinkd::P2);
-        assert(size == 34);
+        assert(size == 272);
         return punctured;
     }
 
@@ -387,6 +387,7 @@ private:
     void modulate()
     {
         using namespace std::chrono_literals;
+        using clock = std::chrono::steady_clock;
 
         state_ = State::IDLE;
         codec2_ = ::codec2_create(CODEC2_MODE_3200);
@@ -396,13 +397,19 @@ private:
         uint16_t frame_number = 0;
         uint8_t lich_segment = 0;
         audio_frame_t audio;
+        auto current = clock::now();
 
         audio.fill(0);
 
         while (audio_queue_->is_open() && bitstream_queue_->is_open())
         {
             int16_t sample;
-            if (!audio_queue_->get(sample, 50ms)) sample = 0;    // May be closed.
+            if (!(audio_queue_->get(sample, 5s))) sample = 0;    // May be closed.
+            if (!(audio_queue_->is_open()))
+            {
+                std::clog << "audio output queue closed" << std::endl;
+                break;
+            }
             switch (state_)
             {
             case State::IDLE:
@@ -417,11 +424,18 @@ private:
                 frame_number = 0;
                 lich_segment = 0;
                 state_ = State::ACTIVE;
+                current = clock::now();
                 break;
             case State::ACTIVE:
                 audio[index++] = sample;
                 if (index == audio.size())
                 {
+                    auto now = clock::now();
+                    if (now - current > 40ms)
+                    {
+                        std::clog << "WARNING: packet time exceeded" << std::endl;
+                    }
+                    current = now;
                     index = 0;
                     send_audio(lich[lich_segment++], frame_number++, audio);
                     if (frame_number == 0x8000) frame_number = 0;
@@ -482,7 +496,7 @@ public:
      * @param output is a shared pointer to the symbol output queue.
      * @return a future which is used to return error information to the caller.
      */
-    std::future<void> run(std::shared_ptr<audio_queue_t> input, std::shared_ptr<bitstream_queue_t> output)
+    std::future<void> run(const std::shared_ptr<audio_queue_t>& input, const std::shared_ptr<bitstream_queue_t>& output)
     {
         using namespace std::chrono_literals;
 

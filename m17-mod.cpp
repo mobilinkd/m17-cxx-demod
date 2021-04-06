@@ -27,6 +27,7 @@
 #include <iomanip>
 #include <atomic>
 #include <optional>
+#include <mutex>
 
 #include <cstdlib>
 
@@ -152,7 +153,7 @@ struct Config
 
 using lsf_t = std::array<uint8_t, 30>;
 
-std::atomic<bool> running{true};
+std::atomic<bool> running{false};
 
 bool bitstream = false;
 
@@ -309,8 +310,8 @@ lsf_t send_lsf(const std::string& src, const std::string& dest)
         encoded_dest = mobilinkd::LinkSetupFrame::encode_callsign(callsign);
      }
 
-    auto rit = std::copy(encoded_src.begin(), encoded_src.end(), result.begin());
-    std::copy(encoded_dest.begin(), encoded_dest.end(), rit);
+    auto rit = std::copy(encoded_dest.begin(), encoded_dest.end(), result.begin());
+    std::copy(encoded_src.begin(), encoded_src.end(), rit);
     result[12] = 0;
     result[13] = 5;
 
@@ -530,6 +531,8 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
     send_audio_frame(lich[lich_segment], data);
 }
+#define USE_OLD_MODULATOR
+#ifdef USE_OLD_MODULATOR
 
 int main(int argc, char* argv[])
 {
@@ -566,7 +569,8 @@ int main(int argc, char* argv[])
     return EXIT_SUCCESS;
 }
 
-#if 0
+#else // use new modulator
+
 int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
@@ -579,7 +583,7 @@ int main(int argc, char* argv[])
 
     auto audio_queue = std::make_shared<M17Modulator::audio_queue_t>();
     auto bitstream_queue = std::make_shared<M17Modulator::bitstream_queue_t>();
-
+    
     M17Modulator modulator(config->source_address, config->destination_address);
     auto future = modulator.run(audio_queue, bitstream_queue);
     modulator.ptt_on();
@@ -590,20 +594,29 @@ int main(int argc, char* argv[])
     uint8_t bits;
     size_t index = 0;
 
-    std::thread thd([&audio_queue](){
+    std::thread thd([audio_queue](){
         int16_t sample = 0;
+        running = true;
         while (running && std::cin)
         {
             std::cin.read(reinterpret_cast<char*>(&sample), 2);
-            audio_queue->put(sample);
+            audio_queue->put(sample, 5s);
         }
         running = false;
     });
 
+    while (!running) std::this_thread::yield();
+
     // Input must be 8000 SPS, 16-bit LE, 1 channel raw audio.
     while (running)
     {
-        if (!bitstream_queue->get(bits, 1s)) break;
+        if (!(bitstream_queue->get(bits, 1s)))
+        {
+            assert(bitstream_queue->is_closed());
+            std::clog << "bitstream queue is closed; done transmitting." << std::endl;
+            running = false;
+            break;
+        }
 
         if (config->bitstream)
         {
@@ -626,6 +639,8 @@ int main(int argc, char* argv[])
             }
         }
     }
+
+    std::clog << "No longer running" << std::endl;
 
     running = false;
     modulator.ptt_off();
