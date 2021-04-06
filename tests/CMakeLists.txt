@@ -45,3 +45,7 @@ gtest_add_tests(M17ModulatorTest "" AUTO)
 add_executable (UtilTest UtilTest.cpp)
 target_link_libraries(UtilTest gtest pthread)
 gtest_add_tests(UtilTest "" AUTO)
+
+add_executable (LinkSetupFrameTest LinkSetupFrameTest.cpp)
+target_link_libraries(LinkSetupFrameTest gtest pthread)
+gtest_add_tests(LinkSetupFrameTest "" AUTO)
