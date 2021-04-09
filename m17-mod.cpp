@@ -219,8 +219,9 @@ std::array<int16_t, 1920> symbols_to_baseband(std::array<int8_t, 192> symbols)
 
     for (auto& b : baseband)
     {
-        b = rrc(b) * 25.0;
+        b = rrc(b) * 7168.0;
     }
+
     return baseband;
 }
 
@@ -312,7 +313,7 @@ lsf_t send_lsf(const std::string& src, const std::string& dest)
 
     auto rit = std::copy(encoded_dest.begin(), encoded_dest.end(), result.begin());
     std::copy(encoded_src.begin(), encoded_src.end(), rit);
-    result[12] = 0;
+    result[12] = 5;
     result[13] = 5;
 
     crc.reset();
@@ -482,6 +483,8 @@ void transmit(queue_t& queue, const lsf_t& lsf)
 {
     using namespace mobilinkd;
 
+    assert(running);
+
     lich_t lich;
     for (size_t i = 0; i != lich.size(); ++i)
     {
@@ -501,7 +504,8 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     size_t index = 0;
     uint16_t frame_number = 0;
     uint8_t lich_segment = 0;
-    while (queue.is_open())
+    while(!queue.is_closed() && queue.empty()) std::this_thread::yield();
+    while (!queue.is_closed())
     {
         int16_t sample;
         if (!queue.get(sample, std::chrono::milliseconds(40))) break;
@@ -548,6 +552,7 @@ int main(int argc, char* argv[])
     send_preamble();
     auto lsf = send_lsf(config->source_address, config->destination_address);
 
+    running = true;
     queue_t queue;
     std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
 
@@ -558,7 +563,7 @@ int main(int argc, char* argv[])
     {
         int16_t sample;
         if (!std::cin.read(reinterpret_cast<char*>(&sample), 2)) break;
-        if (!queue.put(sample, std::chrono::seconds(1))) break;
+        if (!queue.put(sample, std::chrono::seconds(300))) break;
     }
 
     running = false;

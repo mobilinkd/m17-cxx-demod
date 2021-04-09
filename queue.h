@@ -29,7 +29,7 @@ private:
     std::list<T> queue_;
     size_t size_ = 0;
     State state_ = State::OPEN;
-    mutex_type mutex_;
+    mutable mutex_type mutex_;
     std::condition_variable full_;
     std::condition_variable empty_;
     
@@ -231,6 +231,15 @@ public:
         return size_;
     }
     
+    /**
+     *  @return the number of items in the queue.
+     */
+    bool empty() const
+    {
+        guard_type lock(mutex_);
+        return size_ == 0;
+    }
+
     /**
      *  @return the capacity of the queue.
      */
