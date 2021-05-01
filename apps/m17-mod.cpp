@@ -252,7 +252,7 @@ void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
     auto fit = std::copy(sw.begin(), sw.end(), temp.begin());
     std::copy(symbols.begin(), symbols.end(), fit);
     auto baseband = symbols_to_baseband(temp);
-    for (auto b : baseband) std::cout << uint8_t((b & 0xFF00) >> 8) << uint8_t(b & 0xFF);
+    for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
 }
 
 
@@ -276,7 +276,7 @@ void send_preamble()
     {
         auto preamble_symbols = bytes_to_symbols(preamble_bytes);
         auto preamble_baseband = symbols_to_baseband(preamble_symbols);
-        for (auto b : preamble_baseband) std::cout << uint8_t(b >> 8) << uint8_t(b & 0xFF);
+        for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
     }
 }
 
