@@ -1,10 +1,11 @@
-// Copyright 2015-2020 Mobilinkd LLC.
+// Copyright 2015-2021 Mobilinkd LLC.
 
 #pragma once
 
 #include "Filter.h"
 
 #include <array>
+#include <cstddef>
 
 namespace mobilinkd
 {

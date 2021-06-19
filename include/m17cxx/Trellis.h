@@ -1,4 +1,4 @@
-// Copyright 2020 Mobilinkd LLC.
+// Copyright 2020-2021 Mobilinkd LLC.
 
 // make CXXFLAGS="$(pkg-config --cflags gtest) $(pkg-config --libs gtest) -I. -O3" tests/TrellisTest
 
@@ -30,6 +30,10 @@ inline constexpr auto P2 = std::experimental::make_array<int8_t>(
     0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1,
     1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1,
     0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1);
+
+/// Puncture matrix for packet frames (7/8).
+inline constexpr auto P3 = std::experimental::make_array<int8_t>(
+    1, 1, 1, 1, 1, 1, 1, 0);
 
 /**
  * Convert an integer value to an array of bits, with the

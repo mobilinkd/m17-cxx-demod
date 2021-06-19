@@ -1,7 +1,7 @@
 // Copyright 2020 Mobilinkd LLC.
 
 #include "m17-demod.h"
-#include "Fsk4Demod.h"
+#include "M17Demodulator.h"
 #include "Util.h"
 #include "CarrierDetect.h"
 #include "M17Synchronizer.h"
@@ -59,116 +59,16 @@ int main(int argc, char* argv[])
 
     }
     
-    auto demod = Fsk4Demod(48000.0, 4800.0, 0.01, .0025);
-    auto dcd = CarrierDetect<double>(evm_b, evm_a, 0.01, 0.7);
-    auto sync1 = M17Synchronizer(0x55F7, 1);
-    auto sync2 = M17Synchronizer(0xFF5D, 1);
-    auto sync4 = M17Synchronizer(0xFF5D, 3);
-    auto framer = M17Framer<>();
-    auto decoder = M17FrameDecoder();
+    M17Demodulator demod;
 
-    int count = 0;
-    enum class State { UNLOCKED, SYNC, FR_SYNC, FRAMING};
-    State state = State::UNLOCKED;
-    int8_t* frame;
-    alignas(16) std::array<int8_t, framer.size()> buffer;
-    size_t ber = 0;
-    size_t sync_count = 0;
-    size_t lost_sync_count = 0;
-    bool locked_ = false;
+    demod.verbose(display_diags);
 
     while (std::cin)
     {
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
         if (invert_input) sample *= -1;
-        auto result = demod(sample / 65536.0, locked_);
-        if (result)
-        {
-            auto [prev_sample, phase_estimate, symbol, evm, estimated_deviation, estimated_frequency_offset, evma] = *result;
-            auto [locked, rms] = dcd(evm);
-
-            switch (state)
-            {
-            case State::UNLOCKED:
-                if (!locked)
-                {
-                    locked_ = false;
-                    break;
-                }
-                state = State::SYNC;
-                framer.reset();
-                decoder.reset();
-                ber = 1000;
-                // Fall-through
-            case State::SYNC:
-                if (!locked)
-                {
-                    state = State::UNLOCKED;
-                }
-                else if (sync1(from_4fsk(symbol)))
-                {
-                    state = State::FRAMING;
-                    lost_sync_count = 0;
-                }
-                else if (sync2(from_4fsk(symbol)))
-                {
-                    state = State::FRAMING;
-                }
-                break;
-            case State::FR_SYNC:
-                if (!locked)
-                {
-                    std::cerr << "\nLost lock" << std::endl;
-                    state = State::UNLOCKED;
-                }
-                else if (sync4(from_4fsk(symbol)) && sync_count == 7)
-                {
-                    state = State::FRAMING;
-                    lost_sync_count = 0;
-                }
-                else if (++sync_count == 8)
-                {
-                    if (++lost_sync_count == 4)
-                    {
-                        std::cerr << "\nLost frame sync " << std::hex << sync4.buffer_ << std::dec << std::endl;
-                        state = State::UNLOCKED;
-                        locked_ = false;
-                    }
-                    else
-                    {
-                        state = State::FRAMING;
-                    }
-                    
-                }
-                break;
-            case State::FRAMING:
-                {
-                    locked_ = true;
-                    auto n = llr<double, 4>(prev_sample);
-                    auto len = framer(n, &frame);
-                    if (len != 0)
-                    {
-                        state = State::FR_SYNC;
-                        sync_count = 0;
-                        std::copy(frame, frame + len, buffer.begin());
-                        decoder(buffer, ber);
-                    }
-                }
-                break;
-            }
-
-            if ((count++ % 192) == 0)
-            {
-                if (display_diags) std::cerr << "\rstate: " << std::setw(1) << int(state)
-                    << ", evm: " << std::setfill(' ') << std::setprecision(2) << std::setw(8) << evma
-                    << ", deviation: " << std::setprecision(2) << std::setw(8) << (1.0 / estimated_deviation)
-                    << ", freq offset: " << std::setprecision(2) << std::setw(8) << estimated_frequency_offset
-                    << ", locked: " << std::boolalpha << std::setw(6) << locked
-                    << ", jitter: " << std::setprecision(2) << std::setw(8) << rms
-                    << ", ber: " << ber << "         "  << std::ends;
-            }
-        }
+        demod(sample / 44000.0);
     }
 
     std::cerr << std::endl;

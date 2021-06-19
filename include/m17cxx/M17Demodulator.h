@@ -17,8 +17,6 @@
 #include <optional>
 #include <tuple>
 
-extern bool display_lsf;
-
 namespace mobilinkd {
 
 namespace detail
@@ -379,7 +377,6 @@ void M17Demodulator::do_frame(float filtered_sample)
 			break;
 		case M17FrameDecoder::DecodeResult::EOS:
 			demodState = DemodState::LSF_SYNC;
-			std::cerr << "\nEOS\n";
 			break;
 		case M17FrameDecoder::DecodeResult::OK:
 			break;
