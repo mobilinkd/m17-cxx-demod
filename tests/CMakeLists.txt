@@ -49,3 +49,23 @@ gtest_add_tests(UtilTest "" AUTO)
 add_executable (LinkSetupFrameTest LinkSetupFrameTest.cpp)
 target_link_libraries(LinkSetupFrameTest m17cxx gtest pthread)
 gtest_add_tests(LinkSetupFrameTest "" AUTO)
+
+add_executable (SlidingDFTTest SlidingDFTTest.cpp)
+target_link_libraries(SlidingDFTTest m17cxx gtest pthread)
+gtest_add_tests(SlidingDFTTest "" AUTO)
+
+add_executable (DataCarrierDetectTest DataCarrierDetectTest.cpp)
+target_link_libraries(DataCarrierDetectTest m17cxx gtest pthread)
+gtest_add_tests(DataCarrierDetectTest "" AUTO)
+
+add_executable (ClockRecoveryTest ClockRecoveryTest.cpp)
+target_link_libraries(ClockRecoveryTest m17cxx gtest pthread)
+gtest_add_tests(ClockRecoveryTest "" AUTO)
+
+add_executable (FreqDevEstimatorTest FreqDevEstimatorTest.cpp)
+target_link_libraries(FreqDevEstimatorTest m17cxx gtest pthread)
+gtest_add_tests(FreqDevEstimatorTest "" AUTO)
+
+add_executable (CorrelatorTest CorrelatorTest.cpp)
+target_link_libraries(CorrelatorTest m17cxx gtest pthread)
+gtest_add_tests(CorrelatorTest "" AUTO)
