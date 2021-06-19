@@ -33,16 +33,17 @@ struct DataCarrierDetect
     using NDFT = NSlidingDFT<FloatType, SampleRate, SampleRate / Accuracy, 2>;
 
     NDFT dft_;
-    FloatType trigger_;
+    FloatType ltrigger_;
+    FloatType htrigger_;
     FloatType level_1 = 0.0;
     FloatType level_2 = 0.0;
     FloatType level_ = 0.0;
+    bool triggered_ = false;
 
     DataCarrierDetect(
         size_t freq1, size_t freq2,
-        FloatType trigger = 100.0
-        )
-    : dft_({freq1, freq2}), trigger_(trigger)
+        FloatType ltrigger = 2.0, FloatType htrigger = 5.0)
+    : dft_({freq1, freq2}), ltrigger_(ltrigger), htrigger_(htrigger)
     {
     }
 
@@ -65,11 +66,12 @@ struct DataCarrierDetect
     	level_ = level_ * 0.8 + 0.2 * (level_1 / level_2);
     	level_1 = 0.0;
     	level_2 = 0.0;
+        triggered_ = triggered_ ? level_ > ltrigger_ : level_ > htrigger_;
     }
 
 
     FloatType level() const { return level_; }
-    bool dcd() const { return level_ > trigger_; }
+    bool dcd() const { return triggered_; }
 };
 
 } // mobilinkd

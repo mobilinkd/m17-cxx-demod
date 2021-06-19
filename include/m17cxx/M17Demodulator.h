@@ -64,7 +64,7 @@ struct M17Demodulator
     enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, FRAME };
 
     BaseFirFilter<double, std::tuple_size<decltype(detail::rrc_taps)>::value> demod_filter = makeFirFilter(detail::rrc_taps);
-    DataCarrierDetect<double, SAMPLE_RATE, 1000> dcd{2000, 4000, 5.0};
+    DataCarrierDetect<double, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 4.0};
     ClockRecovery<float, SAMPLE_RATE, SYMBOL_RATE> clock_recovery;
 
     collelator_t correlator;
@@ -406,7 +406,7 @@ void M17Demodulator::operator()(const double input)
  
 	if (!dcd_)
 	{
-		if (count_ % BLOCK_SIZE == 0)
+		if (count_ % (BLOCK_SIZE * 2) == 0)
 		{
 			update_dcd();
 			dcd.update();

@@ -20,14 +20,14 @@ class DataCarrierDetectTest : public ::testing::Test {
 
 TEST_F(DataCarrierDetectTest, construct)
 {
-    auto dcd = mobilinkd::DataCarrierDetect<float, 48000, 1000>(2000, 4000, 5.0);
+    auto dcd = mobilinkd::DataCarrierDetect<float, 48000, 1000>(2000, 4000, 1.0, 5.0);
 }
 
 TEST_F(DataCarrierDetectTest, dcd)
 {
     constexpr std::array<float, 24> input = {1,1,1,1,1,1,1,1,1,1,1,1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
 
-    auto dcd = mobilinkd::DataCarrierDetect<float, 48000, 1000>(2000,3000,5.0);
+    auto dcd = mobilinkd::DataCarrierDetect<float, 48000, 1000>(2000,3000,1.0,5.0);
     std::for_each(input.begin(), input.end(), [&dcd](float x){dcd(x);});
     std::for_each(input.begin(), input.end(), [&dcd](float x){dcd(x);});
     std::for_each(input.begin(), input.end(), [&dcd](float x){dcd(x);});
@@ -41,7 +41,7 @@ TEST_F(DataCarrierDetectTest, dcd_off)
 {
     constexpr std::array<float, 16> input = {1,1,1,1,1,1,1,1,-1,-1,-1,-1,-1,-1,-1,-1};
 
-    auto dcd = mobilinkd::DataCarrierDetect<float, 48000, 1000>(2000,3000,1.0);
+    auto dcd = mobilinkd::DataCarrierDetect<float, 48000, 1000>(2000,3000, 0.1, 1.0);
     std::for_each(input.begin(), input.end(), [&dcd](float x){dcd(x);});
     std::for_each(input.begin(), input.end(), [&dcd](float x){dcd(x);});
     std::for_each(input.begin(), input.end(), [&dcd](float x){dcd(x);});
