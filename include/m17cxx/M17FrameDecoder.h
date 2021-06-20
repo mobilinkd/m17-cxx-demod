@@ -484,7 +484,7 @@ struct M17FrameDecoder
             switch (state_)
             {
             case State::LSF:
-                return decode_lich(buffer, ber);
+                decode_lich(buffer, ber);
             case State::STREAM:
                 return decode_stream(buffer, ber);
             default:
