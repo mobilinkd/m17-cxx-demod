@@ -64,7 +64,7 @@ struct M17Demodulator
     enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, FRAME };
 
     BaseFirFilter<double, std::tuple_size<decltype(detail::rrc_taps)>::value> demod_filter = makeFirFilter(detail::rrc_taps);
-    DataCarrierDetect<double, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 4.0};
+    DataCarrierDetect<double, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 2.0};
     ClockRecovery<float, SAMPLE_RATE, SYMBOL_RATE> clock_recovery;
 
     collelator_t correlator;
@@ -92,6 +92,7 @@ struct M17Demodulator
     size_t ber = 0;
     int sync_count = 0;
     int missing_sync_count = 0;
+    uint8_t sync_sample_index = 0;
 
     virtual ~M17Demodulator() {}
 
@@ -130,7 +131,7 @@ void M17Demodulator::update_values(uint8_t index)
 {
 	correlator.apply([this,index](float t){dev.sample(t);}, index);
 	dev.update();
-	sample_index = index;
+	sync_sample_index = index;
 }
 
 void M17Demodulator::dcd_on()
@@ -186,6 +187,7 @@ void M17Demodulator::do_unlocked()
 			need_clock_reset_ = true;
 			dev.reset();
 			update_values(sync_index);
+			sample_index = sync_index;
 			demodState = DemodState::LSF_SYNC;
 		}
 	}
@@ -199,6 +201,7 @@ void M17Demodulator::do_unlocked()
 			missing_sync_count = 0;
 			need_clock_reset_ = true;
 			update_values(sync_index);
+			sample_index = sync_index;
 			dev.reset();
 			demodState = DemodState::FRAME;
 			if (sync_updated < 0)
@@ -275,13 +278,13 @@ void M17Demodulator::do_stream_sync()
 		missing_sync_count = 0;
 		if (sync_count <= 70)
 		{
-			update_values(sample_index);
+			update_values(sync_index);
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
 		else if (sync_count > 70)
 		{
-			update_values(sample_index);
+			update_values(sync_index);
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
@@ -315,7 +318,7 @@ void M17Demodulator::do_packet_sync()
 	if (sync_count > 70 && sync_updated)
 	{
 		missing_sync_count = 0;
-		update_values(sample_index);
+		update_values(sync_index);
 		sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
 		demodState = DemodState::FRAME;
 	}
@@ -440,7 +443,14 @@ void M17Demodulator::operator()(const double input)
 		if (need_clock_update_)
 		{
 			clock_recovery.update();
-			sample_index = clock_recovery.sample_index();
+			uint8_t clock_index = clock_recovery.sample_index();
+			uint8_t clock_diff = std::abs(sample_index - clock_index);
+			uint8_t sync_diff = std::abs(sample_index - sync_sample_index);
+			bool clock_diff_ok = clock_diff <= 1 || clock_diff == 9;
+			bool sync_diff_ok = sync_diff <= 1 || sync_diff == 9;
+			if (clock_diff_ok) sample_index = clock_index;
+			else if (sync_diff_ok) sample_index = sync_sample_index;
+			// else unchanged.
 			need_clock_update_ = false;
 		}
 	}
