@@ -168,8 +168,9 @@ struct M17FrameDecoder
         std::cerr << "\nSRC: ";
         for (auto x : src) if (x) std::cerr << x;
         std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
+        auto dest = LinkSetupFrame::decode_callsign(encoded_call);
         std::cerr << ", DEST: ";
-        for (auto x : encoded_call) if (x) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(x);
+        for (auto x : dest) if (x) std::cerr << x;
         uint16_t type = (lsf[12] << 8) | lsf[13];
         std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
         std::cerr << ", NONCE: ";
