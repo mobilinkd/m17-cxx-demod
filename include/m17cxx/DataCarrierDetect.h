@@ -7,7 +7,6 @@
 #include <array>
 #include <complex>
 #include <cstddef>
-#include <iostream>
 
 namespace mobilinkd {
 

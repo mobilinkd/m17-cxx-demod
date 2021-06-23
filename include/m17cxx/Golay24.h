@@ -4,10 +4,9 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <algorithm>
 #include <utility>
-#include <iostream>
-#include <iomanip>
 
 namespace mobilinkd {
 

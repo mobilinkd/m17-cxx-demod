@@ -7,8 +7,6 @@
 #include "Util.h"
 
 #include <limits>
-#include <iostream>
-#include <iomanip>
 
 namespace mobilinkd
 {
@@ -154,8 +152,6 @@ struct Viterbi
             }
             std::swap(currMetrics, prevMetrics);
             hindex += 1;
-            // for (size_t i = 0; i != NumStates; ++i) std::cerr << std::setw(5) << prevMetrics[i] << ",";
-            // std::cerr << std::endl;
         }
 
         // Find starting point. Should be 0 for properly flushed CCs.

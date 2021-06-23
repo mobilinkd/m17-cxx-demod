@@ -5,8 +5,7 @@
 #include "Filter.h"
 
 #include <array>
-#include <vector>
-#include <cstdlib>
+#include <cstddef>
 
 namespace mobilinkd
 {
