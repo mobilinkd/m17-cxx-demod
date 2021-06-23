@@ -130,7 +130,7 @@ struct SyncWord
 	: sync_word_(std::move(sync_word)), magnitude_1_(magnitude_1), magnitude_2_(magnitude_2)
 	{}
 
-	float triggered(Correlator& correlator)
+	value_type triggered(Correlator& correlator)
 	{
 		value_type limit_1 = correlator.limit() * magnitude_1_;
 		value_type limit_2 = correlator.limit() * magnitude_2_;
