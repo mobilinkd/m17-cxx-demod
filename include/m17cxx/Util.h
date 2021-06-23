@@ -96,8 +96,10 @@ template <typename FloatType, size_t LLR>
 auto llr(FloatType sample)
 {
     static constexpr auto symbol_map = detail::make_llr_map<FloatType, LLR>();
+    static constexpr FloatType MAX_VALUE = 3.0;
+    static constexpr FloatType MIN_VALUE = -3.0;
 
-    FloatType s = std::min(3.0, std::max(-3.0, sample));
+    FloatType s = std::min(MAX_VALUE, std::max(MIN_VALUE, sample));
 
     auto it = std::lower_bound(symbol_map.begin(), symbol_map.end(), s,
         [](std::tuple<FloatType, std::tuple<int8_t, int8_t>> const& e, FloatType s){
@@ -260,6 +262,26 @@ constexpr auto to_byte_array(std::array<T, N> in)
         }
     }
     return out;
+}
+
+template <typename T, size_t N>
+constexpr void to_byte_array(std::array<T, N> in, std::array<uint8_t, (N + 7) / 8>& out)
+{
+    size_t i = 0;
+    size_t b = 0;
+    uint8_t tmp = 0;
+    for (auto c : in)
+    {
+        tmp |= (c << (7 - b));
+        if (++b == 8)
+        {
+            out[i] = tmp;
+            tmp = 0;
+            ++i;
+            b = 0;
+        }
+    }
+    if (i < out.size()) out[i] = tmp;
 }
 
 } // mobilinkd
