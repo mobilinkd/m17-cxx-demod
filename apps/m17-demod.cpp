@@ -1,17 +1,15 @@
 // Copyright 2020 Mobilinkd LLC.
 
-#include "m17-demod.h"
 #include "M17Demodulator.h"
-#include "Util.h"
-#include "CarrierDetect.h"
-#include "M17Synchronizer.h"
-#include "M17Framer.h"
-#include "M17FrameDecoder.h"
+#include "CRC16.h"
+
+#include <codec2/codec2.h>
 
 #include <array>
 #include <experimental/array>
 #include <iostream>
 #include <iomanip>
+#include <vector>
 
 #include <cstdlib>
 
@@ -39,11 +37,167 @@ const auto rrc_taps = std::experimental::make_array<double>(
     -0.001125978562075172, -0.006136551625729697, -0.009265784007800534
 );
 
-const auto evm_b = std::experimental::make_array<double>(0.02008337, 0.04016673, 0.02008337);
-const auto evm_a = std::experimental::make_array<double>(1.0, -1.56101808, 0.64135154);
-
 bool display_lsf = false;
 bool invert_input = false;
+
+struct CODEC2 *codec2;
+
+std::vector<uint8_t> current_packet;
+size_t packet_frame_counter = 0;
+mobilinkd::CRC16<0x1021, 0xFFFF> packet_crc;
+mobilinkd::CRC16<0x5935, 0xFFFF> stream_crc;
+
+template <typename T, size_t N>
+bool dump_lsf(std::array<T, N> const& lsf)
+{
+    using namespace mobilinkd;
+    
+    LinkSetupFrame::encoded_call_t encoded_call;
+
+    std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
+    auto src = LinkSetupFrame::decode_callsign(encoded_call);
+    std::cerr << "\nSRC: ";
+    for (auto x : src) if (x) std::cerr << x;
+
+    std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
+    auto dest = LinkSetupFrame::decode_callsign(encoded_call);
+    std::cerr << ", DEST: ";
+    for (auto x : dest) if (x) std::cerr << x;
+
+    uint16_t type = (lsf[12] << 8) | lsf[13];
+    std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
+
+    std::cerr << ", NONCE: ";
+    for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
+
+    uint16_t crc = (lsf[28] << 8) | lsf[29];
+    std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
+    std::cerr << std::dec << std::endl;
+
+    return true;
+}
+
+
+bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, int viterbi_cost)
+{
+    bool result = true;
+
+    std::array<int16_t, 160> buf;
+    // First two bytes are the frame counter + EOS indicator.
+    if (viterbi_cost < 36 && (audio[0] & 0x80))
+    {
+        if (display_lsf) std::cerr << "\nEOS" << std::endl;
+        result = false;
+    }
+
+    codec2_decode(codec2, buf.begin(), audio.begin() + 2);
+    std::cout.write((const char*)buf.begin(), 320);
+    codec2_decode(codec2, buf.begin(), audio.begin() + 10);
+    std::cout.write((const char*)buf.begin(), 320);
+
+    return result;
+}
+
+bool decode_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packet_segment)
+{
+    if (packet_segment[25] & 0x80) // last frame of packet.
+    {
+        size_t packet_size = (packet_segment[25] & 0x7F) >> 2;
+        packet_size = std::min(packet_size, size_t(25));
+        for (size_t i = 0; i != packet_size; ++i)
+        {
+            current_packet.push_back(packet_segment[i]);
+        }
+        
+        packet_crc.reset();
+        for (auto c : current_packet) packet_crc(c);
+        auto checksum = packet_crc.get();
+
+        if (checksum == 0)
+        {
+            std::cout.write((const char*) &current_packet.front(), current_packet.size());
+            return true;
+        }
+
+        return false;
+    }
+
+    size_t frame_number = (packet_segment[25] & 0x7F) >> 2;
+    if (frame_number != packet_frame_counter++)
+    {
+        std::cerr << "\nPacket frame sequence error\n";
+        return false;
+    }
+
+    for (size_t i = 0; i != 25; ++i)
+    {
+        current_packet.push_back(packet_segment[i]);
+    }
+
+    return true;
+}
+
+
+bool decode_full_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packet_segment)
+{
+    if (packet_segment[25] & 0x80) // last packet;
+    {
+        size_t packet_size = (packet_segment[25] & 0x7F) >> 2;
+        packet_size = std::min(packet_size, size_t(25));
+        for (size_t i = 0; i != packet_size; ++i)
+        {
+            current_packet.push_back(packet_segment[i]);
+        }
+
+        std::cout.write((const char*)&current_packet.front(), current_packet.size());
+
+        return true;
+    }
+
+    size_t frame_number = (packet_segment[25] & 0x7F) >> 2;
+    if (frame_number != packet_frame_counter++)
+    {
+        std::cerr << "Packet frame sequence error" << std::endl;
+        return false;
+    }
+
+    for (size_t i = 0; i != 25; ++i)
+    {
+        current_packet.push_back(packet_segment[i]);
+    }
+
+    return true;
+}
+
+bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int viterbi_cost)
+{
+    using FrameType = mobilinkd::M17FrameDecoder::FrameType;
+
+    bool result = true;
+
+    switch (frame.type)
+    {
+        case FrameType::LSF:
+            current_packet.clear();
+            packet_frame_counter = 0;
+            result = dump_lsf(frame.lsf);
+            break;
+        case FrameType::LICH:
+            std::cout << "LICH" << std::endl;
+            break;
+        case FrameType::STREAM:
+            result = demodulate_audio(frame.stream, viterbi_cost);
+            break;
+        case FrameType::BASIC_PACKET:
+            result = decode_packet(frame.packet);
+            break;
+        case FrameType::FULL_PACKET:
+            result = decode_packet(frame.packet);
+            break;
+    }
+
+    return result;
+}
 
 int main(int argc, char* argv[])
 {
@@ -58,8 +212,10 @@ int main(int argc, char* argv[])
         if (argv[i] == "-i"s) invert_input = true;
 
     }
-    
-    M17Demodulator demod;
+
+    codec2 = ::codec2_create(CODEC2_MODE_3200);
+
+    M17Demodulator demod(handle_frame);
 
     demod.verbose(display_diags);
 
@@ -72,7 +228,8 @@ int main(int argc, char* argv[])
     }
 
     std::cerr << std::endl;
-    // std::cout << std::endl;
+
+    codec2_destroy(codec2);
 
     return EXIT_SUCCESS;
 }

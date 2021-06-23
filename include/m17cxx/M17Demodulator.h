@@ -6,6 +6,7 @@
 #include "ClockRecovery.h"
 #include "Correlator.h"
 #include "DataCarrierDetect.h"
+#include "FirFilter.h"
 #include "FreqDevEstimator.h"
 #include "M17FrameDecoder.h"
 #include "M17Framer.h"
@@ -93,6 +94,10 @@ struct M17Demodulator
     int sync_count = 0;
     int missing_sync_count = 0;
     uint8_t sync_sample_index = 0;
+
+	M17Demodulator(M17FrameDecoder::callback_t callback)
+	: decoder(callback)
+	{}
 
     virtual ~M17Demodulator() {}
 
@@ -354,7 +359,7 @@ void M17Demodulator::do_frame(float filtered_sample)
 	{
 		need_clock_update_ = true;
 
-		M17FrameDecoder::buffer_t buffer;
+		M17FrameDecoder::input_buffer_t buffer;
 		std::copy(tmp, tmp + len, buffer.begin());
 		auto valid = decoder(sync_word_type, buffer, ber);
 

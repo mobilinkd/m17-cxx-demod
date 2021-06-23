@@ -10,8 +10,6 @@
 #include "LinkSetupFrame.h"
 #include "Golay24.h"
 
-#include <codec2/codec2.h>
-
 #include <algorithm>
 #include <array>
 #include <functional>
@@ -75,50 +73,68 @@ struct M17FrameDecoder
     Trellis<4,2> trellis_{makeTrellis<4, 2>({031,027})};
     Viterbi<decltype(trellis_), 4> viterbi_{trellis_};
     CRC16<0x5935, 0xFFFF> crc_;
-    CRC16<0x1021, 0xFFFF> packet_crc_;
  
     enum class State {LSF, STREAM, BASIC_PACKET, FULL_PACKET};
     enum class SyncWordType { LSF, STREAM, PACKET, RESERVED };
     enum class DecodeResult { FAIL, OK, EOS, INCOMPLETE, PACKET_INCOMPLETE };
+    enum class FrameType { LSF, LICH, STREAM, BASIC_PACKET, FULL_PACKET };
 
     State state_ = State::LSF;
 
-    using buffer_t = std::array<int8_t, 368>;
+    using input_buffer_t = std::array<int8_t, 368>;
 
     using lsf_conv_buffer_t = std::array<uint8_t, 46>;
-    using lsf_buffer_t = std::array<uint8_t, 30>;
-
     using audio_conv_buffer_t = std::array<uint8_t, 34>;
-    using audio_buffer_t = std::array<uint8_t, 20>;
 
-    using link_setup_callback_t = std::function<void(audio_buffer_t)>;
-    using audio_callback_t = std::function<void(audio_buffer_t)>;
-    
-    link_setup_callback_t link_setup_callback_;
-    audio_callback_t audio_callback_;
-    lsf_buffer_t current_lsf;
+    using lsf_buffer_t = std::array<uint8_t, 30>;
+    using lich_buffer_t = std::array<uint8_t, 6>;
+    using audio_buffer_t = std::array<uint8_t, 20>;
+    using packet_buffer_t = std::array<uint8_t, 26>;
+
+    using output_buffer_t = struct {
+        FrameType type;
+        union {
+            lsf_buffer_t lsf;
+            lich_buffer_t lich;
+            audio_buffer_t stream;
+            packet_buffer_t packet;
+        };
+    };
+
+    using depunctured_buffer_t = union {
+        std::array<int8_t, 488> lsf;
+        std::array<int8_t, 328> stream;
+        std::array<int8_t, 420> packet;
+    };
+
+    using decode_buffer_t = union {
+        std::array<uint8_t, 240> lsf;
+        std::array<uint8_t, 160> stream;
+        std::array<uint8_t, 206> packet;
+    };
+
+    /**
+     * Callback function for frame types.  The caller is expected to return
+     * true if the data was good or unknown and false if the data is known
+     * to be bad.
+     */
+    using callback_t = std::function<bool(const output_buffer_t&, int)>;
+
+    callback_t callback_;
+
+    output_buffer_t output_buffer;
+    depunctured_buffer_t depuncture_buffer;
+    decode_buffer_t decode_buffer;
+
     std::array<int8_t, 6> lich_buffer;
     uint8_t lich_segments{0};       ///< one bit per received LICH fragment.
     std::vector<uint8_t> current_packet;
     size_t packet_frame_counter = 0;
     bool passall_ = false;
 
-    struct CODEC2 *codec2;
-
-    M17FrameDecoder(
-        link_setup_callback_t link_setup_callback = link_setup_callback_t(),
-        audio_callback_t audio_callback = audio_callback_t()
-    )
-    : link_setup_callback_(link_setup_callback)
-    , audio_callback_(audio_callback)
-    {
-        codec2 = ::codec2_create(CODEC2_MODE_3200);
-    }
-
-    ~M17FrameDecoder()
-    {
-        codec2_destroy(codec2);
-    }
+    M17FrameDecoder(callback_t callback)
+    : callback_(callback)
+    {}
 
     void update_state(std::array<uint8_t, 240>& lsf_output)
     {
@@ -157,29 +173,7 @@ struct M17FrameDecoder
         }
     }
 
-
     void reset() { state_ = State::LSF; }
-
-    void dump_lsf(const lsf_buffer_t& lsf)
-    {
-        LinkSetupFrame::encoded_call_t encoded_call;
-        std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
-        auto src = LinkSetupFrame::decode_callsign(encoded_call);
-        std::cerr << "\nSRC: ";
-        for (auto x : src) if (x) std::cerr << x;
-        std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
-        auto dest = LinkSetupFrame::decode_callsign(encoded_call);
-        std::cerr << ", DEST: ";
-        for (auto x : dest) if (x) std::cerr << x;
-        uint16_t type = (lsf[12] << 8) | lsf[13];
-        std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
-        std::cerr << ", NONCE: ";
-        for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
-        uint16_t crc = (lsf[28] << 8) | lsf[29];
-        std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
-        std::cerr << std::dec << std::endl;
-    }
-
 
     /**
      * Decode the LSF and, if it is valid, transition to the next state.
@@ -188,41 +182,34 @@ struct M17FrameDecoder
      * and captured for FULL_PACKET mode.
      *
      * @param buffer
-     * @param lsf
-     * @param ber
+     * @param viterbi_cost
      * @return
      */
-    DecodeResult decode_lsf(buffer_t& buffer, size_t& ber)
+    DecodeResult decode_lsf(input_buffer_t& buffer, size_t& viterbi_cost)
     {
-        std::array<uint8_t, 240> output;
-        auto dp = depunctured<488>(P1, buffer);
-        ber = viterbi_.decode(dp, output);
-        ber = ber > 60 ? ber - 60 : 0;
-        current_lsf = to_byte_array(output);
+        auto bit_count = depuncture(buffer, depuncture_buffer.lsf, P1);
+        viterbi_cost = viterbi_.decode(depuncture_buffer.lsf, decode_buffer.lsf);
+        to_byte_array(decode_buffer.lsf, output_buffer.lsf);
+        
         crc_.reset();
-        for (auto c : current_lsf) crc_(c);
+        for (auto c : output_buffer.lsf) crc_(c);
         auto checksum = crc_.get();
 
         if (checksum == 0)
         {
-            update_state(output);
-            if (state_ == State::STREAM)
-            {
-                if (display_lsf) dump_lsf(current_lsf);
-                return DecodeResult::OK;
-            }
+            update_state(decode_buffer.lsf);
+            output_buffer.type = FrameType::LSF;
+            callback_(output_buffer, viterbi_cost);
             return DecodeResult::OK;
         }
-        else
-        {
-            lich_segments = 0;
-            current_lsf.fill(0);
-            return DecodeResult::FAIL;
-        }
+
+        lich_segments = 0;
+        output_buffer.lsf.fill(0);
+        return DecodeResult::FAIL;
     }
 
     // Unpack  & decode LICH fragments into tmp_buffer.
-    bool unpack_lich(buffer_t& buffer)
+    bool unpack_lich(input_buffer_t& buffer)
     {
         size_t index = 0;
         // Read the 4 24-bit codewords from LICH
@@ -255,7 +242,7 @@ struct M17FrameDecoder
         return true;
     }
 
-    DecodeResult decode_lich(buffer_t& buffer, size_t& ber)
+    DecodeResult decode_lich(input_buffer_t& buffer, size_t& viterbi_cost)
     {
         lich_buffer.fill(0);
         // Read the 4 12-bit codewords from LICH into buffers.lich.
@@ -266,169 +253,77 @@ struct M17FrameDecoder
 
         // Copy decoded LICH to superframe buffer.
         std::copy(lich_buffer.begin(), lich_buffer.begin() + 5,
-            current_lsf.begin() + (fragment_number * 5));
+            output_buffer.lsf.begin() + (fragment_number * 5));
 
         lich_segments |= (1 << fragment_number);        // Indicate segment received.
         if (lich_segments != 0x3F) return DecodeResult::INCOMPLETE;        // More to go...
 
         crc_.reset();
-        for (auto c : current_lsf) crc_(c);
+        for (auto c : output_buffer.lsf) crc_(c);
         auto checksum = crc_.get();
-        // INFO("LICH crc = %04x", checksum);
+
         if (checksum == 0)
         {
         	lich_segments = 0;
             state_ = State::STREAM;
-            ber = 0;
-            if (display_lsf) dump_lsf(current_lsf);
+            viterbi_cost = 0;
+            output_buffer.type = FrameType::LSF;
+            callback_(output_buffer, viterbi_cost);
             return DecodeResult::OK;
         }
 
         // Failed CRC... try again.
         // lich_segments = 0;
-        current_lsf.fill(0);
-        ber = 128;
+        // output_buffer.lsf.fill(0);
+        viterbi_cost = 128;
         return DecodeResult::INCOMPLETE;
     }
 
-    void demodulate_audio(audio_buffer_t audio)
-    {
-        std::array<int16_t, 160> buf;
-        codec2_decode(codec2, buf.begin(), audio.begin() + 2);
-        std::cout.write((const char*)buf.begin(), 320);
-        codec2_decode(codec2, buf.begin(), audio.begin() + 10);
-        std::cout.write((const char*)buf.begin(), 320);
-    }
-
-    DecodeResult decode_stream(buffer_t& buffer, size_t& ber)
+    DecodeResult decode_stream(input_buffer_t& buffer, size_t& viterbi_cost)
     {
         std::array<int8_t, 272> tmp;
         std::copy(buffer.begin() + 96, buffer.end(), tmp.begin());
-        std::array<uint8_t, 160> output;
-        auto dp = depunctured<328>(P2, tmp);
-        ber = viterbi_.decode(dp, output) - 28;
-        auto audio = to_byte_array(output);
+
+        auto bit_count = depuncture(tmp, depuncture_buffer.stream, P2);
+        viterbi_cost = viterbi_.decode(depuncture_buffer.stream, decode_buffer.stream) - 28;
+        to_byte_array(decode_buffer.stream, output_buffer.stream);
+
         crc_.reset();
-        for (auto x : audio) crc_(x);
+        for (auto x : output_buffer.stream) crc_(x);
         auto checksum = crc_.get();
-        if ((checksum == 0) && (audio[0] & 0x80))
+
+        if ((checksum == 0) && (output_buffer.stream[0] & 0x80))
         {
-            if (display_lsf) std::cerr << "\nEOS" << std::endl; 
             state_ = State::LSF;
         }
 
-        demodulate_audio(audio);
+        output_buffer.type = FrameType::STREAM;
+        callback_(output_buffer, viterbi_cost);
+
         return state_ == State::LSF ? DecodeResult::EOS : DecodeResult::OK;
     }
 
     /**
-     * Capture packet frames until an EOF bit is found.  The raw packet is
-     * returned without the checksum.
-     *
-     * @pre current_packet is not null.
+     * Capture packet frames until an EOF bit is found.
 
      * @param buffer the demodulated M17 symbols in LLR format.
-     * @param ber the estimated BER (really more SNR) of the packet.
-     * @return true if a valid packet is returned, otherwise false.
+     * @param viterbi_cost the cost of traversing the trellis.
+     * @param frame_type is either BASIC_PACKET or FULL_PACKET.
+     * @return the result of decoding the packet frame.
      */
-    DecodeResult decode_basic_packet(buffer_t& buffer, size_t& ber)
+   DecodeResult decode_packet(input_buffer_t& buffer, size_t& viterbi_cost, FrameType type)
     {
-        std::array<int8_t, 420> dp;
-        auto bit_count = depuncture(buffer, dp, P3);
-        std::array<uint8_t, 206> output;
-        ber = viterbi_.decode(dp, output);
-        auto packet_segment = to_byte_array(output);
+        auto bit_count = depuncture(buffer, depuncture_buffer.packet, P3);
+        viterbi_cost = viterbi_.decode(depuncture_buffer.packet, decode_buffer.packet);
+        to_byte_array(decode_buffer.packet, output_buffer.packet);
+        
+        output_buffer.type = type;
+        auto result = callback_(output_buffer, viterbi_cost);
 
-        if (packet_segment[25] & 0x80) // last frame of packet.
+        if (output_buffer.packet[25] & 0x80) // last packet;
         {
-            size_t packet_size = (packet_segment[25] & 0x7F) >> 2;
-            packet_size = std::min(packet_size, size_t(25));
-            for (size_t i = 0; i != packet_size; ++i)
-            {
-                current_packet.push_back(packet_segment[i]);
-            }
-            packet_frame_counter = 0;
             state_ = State::LSF;
-            
-            packet_crc_.reset();
-            for (auto c : current_lsf) packet_crc_(c);
-            auto checksum = packet_crc_.get();
-
-            if (checksum == 0)
-            {
-                std::cout.write((const char*) &current_packet.front(), current_packet.size());
-                current_packet.clear();
-                return DecodeResult::OK;
-            }
-
-            // WARN("packet bad fcs = %04x, crc = %04x", current_packet->fcs(), current_packet->crc());
-            if (passall_)
-            {
-                std::cout.write((const char*) &current_packet.front(), current_packet.size());
-            }
-
-            current_packet.clear();
-            return DecodeResult::FAIL;
-        }
-
-        size_t frame_number = (packet_segment[25] & 0x7F) >> 2;
-        if (frame_number != packet_frame_counter++)
-        {
-            std::cerr << "\nPacket frame sequence error\n";
-        }
-
-        for (size_t i = 0; i != 25; ++i)
-        {
-            current_packet.push_back(packet_segment[i]);
-        }
-
-        return DecodeResult::PACKET_INCOMPLETE;
-    }
-
-    /**
-     * Decode full packet types.  The packet is returned without checking
-     * the CRC.
-     *
-     * @pre current_packet is not empty and contains a link setup frame.
-     *
-     * @param buffer
-     * @param ber
-     * @return
-     */
-    DecodeResult decode_full_packet(buffer_t& buffer, size_t& ber)
-    {
-        std::array<int8_t, 420> dp;
-        auto bit_count = depuncture(buffer, dp, P3);
-        std::array<uint8_t, 206> output;
-        ber = viterbi_.decode(dp, output);
-        auto packet_segment = to_byte_array(output);
-
-        if (packet_segment[25] & 0x80) // last packet;
-        {
-            size_t packet_size = (packet_segment[25] & 0x7F) >> 2;
-            packet_size = std::min(packet_size, size_t(25));
-            for (size_t i = 0; i != packet_size; ++i)
-            {
-                current_packet.push_back(packet_segment[i]);
-            }
-
-            std::cout.write((const char*)&current_packet.front(), current_packet.size());
-
-            current_packet.clear();
-            packet_frame_counter = 0;
-            state_ = State::LSF;
-            return DecodeResult::OK;
-        }
-
-        size_t frame_number = (packet_segment[25] & 0x7F) >> 2;
-        if (frame_number != packet_frame_counter++)
-        {
-            std::cerr << "Packet frame sequence error" << std::endl;
-        }
-
-        for (size_t i = 0; i != 25; ++i)
-        {
-            current_packet.push_back(packet_segment[i]);
+            return result ? DecodeResult::OK : DecodeResult::FAIL;
         }
 
         return DecodeResult::PACKET_INCOMPLETE;
@@ -470,7 +365,7 @@ struct M17FrameDecoder
      *  - FULL_PACKET when any packet frame is received.
      *  - LSF when the EOS indicator is set, or when a stream frame is received.
      */
-    DecodeResult operator()(SyncWordType frame_type, buffer_t& buffer, size_t& ber)
+    DecodeResult operator()(SyncWordType frame_type, input_buffer_t& buffer, size_t& viterbi_cost)
     {
         derandomize_(buffer);
         interleaver_.deinterleave(buffer);
@@ -480,14 +375,14 @@ struct M17FrameDecoder
         {
         case SyncWordType::LSF:
             state_ = State::LSF;
-            return decode_lsf(buffer, ber);
+            return decode_lsf(buffer, viterbi_cost);
         case SyncWordType::STREAM:
             switch (state_)
             {
             case State::LSF:
-                decode_lich(buffer, ber);
+                decode_lich(buffer, viterbi_cost);
             case State::STREAM:
-                return decode_stream(buffer, ber);
+                return decode_stream(buffer, viterbi_cost);
             default:
                 state_ = State::LSF;
             }
@@ -496,9 +391,9 @@ struct M17FrameDecoder
             switch (state_)
             {
             case State::BASIC_PACKET:
-                return decode_basic_packet(buffer, ber);
+                return decode_packet(buffer, viterbi_cost, FrameType::BASIC_PACKET);
             case State::FULL_PACKET:
-                return decode_full_packet(buffer, ber);
+                return decode_packet(buffer, viterbi_cost, FrameType::FULL_PACKET);
             default:
                 state_ = State::LSF;
             }
