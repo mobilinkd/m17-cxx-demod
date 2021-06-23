@@ -48,6 +48,47 @@ mobilinkd::CRC16<0x1021, 0xFFFF> packet_crc;
 mobilinkd::CRC16<0x5935, 0xFFFF> stream_crc;
 
 template <typename T, size_t N>
+std::vector<uint8_t> to_packet(std::array<T, N> in)
+{
+    std::vector<uint8_t> result;
+    result.reserve(N/8);
+
+    uint8_t out = 0;
+    size_t b = 0;
+
+    for (auto c : in)
+    {
+        out = (out << 1) | c;
+        if (++b == 8)
+        {
+            result.push_back(out);
+            out = 0;
+            b = 0;
+        }
+    }
+
+    return result;
+}
+
+template <typename T, size_t N>
+void append_packet(std::vector<uint8_t>& result, std::array<T, N> in)
+{
+    uint8_t out = 0;
+    size_t b = 0;
+
+    for (auto c : in)
+    {
+        out = (out << 1) | c;
+        if (++b == 8)
+        {
+            result.push_back(out);
+            out = 0;
+            b = 0;
+        }
+    }
+}
+
+template <typename T, size_t N>
 bool dump_lsf(std::array<T, N> const& lsf)
 {
     using namespace mobilinkd;
@@ -73,6 +114,26 @@ bool dump_lsf(std::array<T, N> const& lsf)
     uint16_t crc = (lsf[28] << 8) | lsf[29];
     std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
     std::cerr << std::dec << std::endl;
+
+    if (!lsf[111]) // LSF type bit 0
+    {
+        uint8_t packet_type = (lsf[109] << 1) | lsf[110];
+
+        current_packet.clear();
+        packet_frame_counter = 0;
+
+        switch (packet_type)
+        {
+        case 1: // RAW -- ignore LSF.
+             break;
+        case 2: // ENCAPSULATED
+            append_packet(current_packet, lsf);
+            break;
+        default:
+            std::cerr << "LSF for reserved packet type" << std::endl;
+            append_packet(current_packet, lsf);
+        }
+    }
 
     return true;
 }
@@ -178,8 +239,6 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
     switch (frame.type)
     {
         case FrameType::LSF:
-            current_packet.clear();
-            packet_frame_counter = 0;
             result = dump_lsf(frame.lsf);
             break;
         case FrameType::LICH:
@@ -199,6 +258,21 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
     return result;
 }
 
+template <typename FloatType>
+void diagnostic_callback(bool dcd, FloatType evm, FloatType deviation, FloatType offset, bool locked,
+    FloatType clock, int sample_index, int sync_index, int clock_index, int viterbi_cost)
+{
+    std::cerr << "\rdcd: " << std::setw(1) << int(dcd)
+        << ", evm: " << std::setfill(' ') << std::setprecision(4) << std::setw(8) << evm * 100 <<"%"
+        << ", deviation: " << std::setprecision(4) << std::setw(8) << deviation
+        << ", freq offset: " << std::setprecision(4) << std::setw(8) << offset
+        << ", locked: " << std::boolalpha << std::setw(6) << locked
+        << ", clock: " << std::setprecision(7) << std::setw(8) << clock
+        << ", sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
+        << ", cost: " << viterbi_cost << "         "  << std::ends;
+}
+
+
 int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
@@ -215,9 +289,27 @@ int main(int argc, char* argv[])
 
     codec2 = ::codec2_create(CODEC2_MODE_3200);
 
-    M17Demodulator demod(handle_frame);
+    using FloatType = float;
 
-    demod.verbose(display_diags);
+    M17Demodulator<FloatType> demod(handle_frame);
+
+    if (display_diags)
+    {
+        std::cerr << "Size of M17Demodulator: " << sizeof(demod) << std::endl;
+        std::cerr << "    Size of M17FrameDecoder: " << sizeof(M17FrameDecoder) << std::endl;
+        std::cerr << "        Size of M17Randomizer<368>: " << sizeof(M17Randomizer<368>) << std::endl;
+        std::cerr << "        Size of PolynomialInterleaver<45, 92, 368>: " << sizeof(PolynomialInterleaver<45, 92, 368>) << std::endl;
+        std::cerr << "        Size of Trellis<4,2>: " << sizeof(Trellis<4,2>) << std::endl;
+        std::cerr << "        Size of Viterbi<Trellis<4,2>, 4>: " << sizeof(Viterbi<Trellis<4,2>, 4>) << std::endl;
+        std::cerr << "        Size of CRC16<0x5935, 0xFFFF>: " << sizeof(CRC16<0x5935, 0xFFFF>) << std::endl;
+        std::cerr << "    Size of M17 filter bank: " << detail::Taps<double>::rrc_taps.size() << std::endl;
+        std::cerr << "    Size of M17 Correlator: " << sizeof(Correlator<FloatType>) << std::endl;
+        std::cerr << "    Size of M17 SyncWord: " << sizeof(SyncWord<Correlator<FloatType>>) << std::endl;
+        std::cerr << "    Size of M17 DataCarrierDetect: " << sizeof(DataCarrierDetect<FloatType, 48000, 500>) << std::endl;
+        std::cerr << "    Size of M17 ClockRecovery: " << sizeof(ClockRecovery<FloatType, 48000, 4800>) << std::endl;
+    }
+
+    demod.diagnostics(diagnostic_callback<FloatType>);
 
     while (std::cin)
     {

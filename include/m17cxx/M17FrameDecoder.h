@@ -12,60 +12,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <functional>
-#include <iostream>
-#include <iomanip>
-#include <vector>
 
 extern bool display_lsf;
 
 namespace mobilinkd
 {
-
-namespace detail {
-
-template <typename T, size_t N>
-std::vector<uint8_t> to_packet(std::array<T, N> in)
-{
-    std::vector<uint8_t> result;
-    result.reserve(N/8);
-
-    uint8_t out = 0;
-    size_t b = 0;
-
-    for (auto c : in)
-    {
-        out = (out << 1) | c;
-        if (++b == 8)
-        {
-            result.push_back(out);
-            out = 0;
-            b = 0;
-        }
-    }
-
-    return result;
-}
-
-template <typename T, size_t N>
-void append_packet(std::vector<uint8_t>& result, std::array<T, N> in)
-{
-    uint8_t out = 0;
-    size_t b = 0;
-
-    for (auto c : in)
-    {
-        out = (out << 1) | c;
-        if (++b == 8)
-        {
-            result.push_back(out);
-            out = 0;
-            b = 0;
-        }
-    }
-}
-
-} // detail
 struct M17FrameDecoder
 {
     M17Randomizer<368> derandomize_;
@@ -128,9 +81,6 @@ struct M17FrameDecoder
 
     std::array<int8_t, 6> lich_buffer;
     uint8_t lich_segments{0};       ///< one bit per received LICH fragment.
-    std::vector<uint8_t> current_packet;
-    size_t packet_frame_counter = 0;
-    bool passall_ = false;
 
     M17FrameDecoder(callback_t callback)
     : callback_(callback)
@@ -145,15 +95,6 @@ struct M17FrameDecoder
         else    // packet frame comes next.
         {
             uint8_t packet_type = (lsf_output[109] << 1) | lsf_output[110];
-
-            if (!current_packet.empty())
-            {
-                std::cerr << "Incomplete packet found" << std::endl;
-                current_packet.clear();
-            }
-
-            packet_frame_counter = 0;
-
             switch (packet_type)
             {
             case 1: // RAW -- ignore LSF.
@@ -161,14 +102,9 @@ struct M17FrameDecoder
                 break;
             case 2: // ENCAPSULATED
                 state_ = State::FULL_PACKET;
-                packet_frame_counter = 0;
-                detail::append_packet(current_packet, lsf_output);
                 break;
             default:
-                std::cerr << "LSF for reserved packet type" << std::endl;
                 state_ = State::FULL_PACKET;
-                packet_frame_counter = 0;
-                detail::append_packet(current_packet, lsf_output);
             }
         }
     }
