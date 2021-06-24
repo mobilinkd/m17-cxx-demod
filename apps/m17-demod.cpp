@@ -2,40 +2,19 @@
 
 #include "M17Demodulator.h"
 #include "CRC16.h"
+#include "ax25_frame.h"
 
 #include <codec2/codec2.h>
+#include <boost/crc.hpp>
 
 #include <array>
-#include <experimental/array>
-#include <iostream>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <iomanip>
+#include <iostream>
 #include <vector>
 
-#include <cstdlib>
-
-// Generated using scikit-commpy
-const auto rrc_taps = std::experimental::make_array<double>(
-    -0.009265784007800534, -0.006136551625729697, -0.001125978562075172, 0.004891777252042491,
-    0.01071805138282269, 0.01505751553351295, 0.01679337935001369, 0.015256245142156299,
-    0.01042830577908502, 0.003031522725559901,  -0.0055333532968188165, -0.013403099825723372,
-    -0.018598682349642525, -0.01944761739590459, -0.015005271935951746, -0.0053887880354343935,
-    0.008056525910253532, 0.022816244158307273, 0.035513467692208076, 0.04244131815783876,
-    0.04025481153629372, 0.02671818654865632, 0.0013810216516704976, -0.03394615682795165,
-    -0.07502635967975885, -0.11540977897637611, -0.14703962203941534, -0.16119995609538576,
-    -0.14969512896336504, -0.10610329539459686, -0.026921412469634916, 0.08757875030779196,
-    0.23293327870303457, 0.4006012210123992, 0.5786324696325503, 0.7528286479934068,
-    0.908262741447522, 1.0309661131633199, 1.1095611856548013, 1.1366197723675815,
-    1.1095611856548013, 1.0309661131633199, 0.908262741447522, 0.7528286479934068,
-    0.5786324696325503,  0.4006012210123992, 0.23293327870303457, 0.08757875030779196,
-    -0.026921412469634916, -0.10610329539459686, -0.14969512896336504, -0.16119995609538576,
-    -0.14703962203941534, -0.11540977897637611, -0.07502635967975885, -0.03394615682795165,
-    0.0013810216516704976, 0.02671818654865632, 0.04025481153629372,  0.04244131815783876,
-    0.035513467692208076, 0.022816244158307273, 0.008056525910253532, -0.0053887880354343935,
-    -0.015005271935951746, -0.01944761739590459, -0.018598682349642525, -0.013403099825723372,
-    -0.0055333532968188165, 0.003031522725559901, 0.01042830577908502, 0.015256245142156299,
-    0.01679337935001369, 0.01505751553351295, 0.01071805138282269, 0.004891777252042491,
-    -0.001125978562075172, -0.006136551625729697, -0.009265784007800534
-);
 
 bool display_lsf = false;
 bool invert_input = false;
@@ -115,12 +94,12 @@ bool dump_lsf(std::array<T, N> const& lsf)
     std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
     std::cerr << std::dec << std::endl;
 
+    current_packet.clear();
+    packet_frame_counter = 0;
+
     if (!lsf[111]) // LSF type bit 0
     {
         uint8_t packet_type = (lsf[109] << 1) | lsf[110];
-
-        current_packet.clear();
-        packet_frame_counter = 0;
 
         switch (packet_type)
         {
@@ -170,25 +149,34 @@ bool decode_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packet_seg
             current_packet.push_back(packet_segment[i]);
         }
         
-        packet_crc.reset();
-        for (auto c : current_packet) packet_crc(c);
-        auto checksum = packet_crc.get();
+        boost::crc_optimal<16, 0x1021, 0xFFFF, 0xFFFF, true, true> crc;
+        crc.process_bytes(&current_packet.front(), current_packet.size());
+        uint16_t checksum = crc.checksum();
 
-        if (checksum == 0)
+        if (checksum == 0x0f47)
         {
-            std::cout.write((const char*) &current_packet.front(), current_packet.size());
+            std::string ax25;
+            ax25.reserve(current_packet.size());
+            for (auto c : current_packet) ax25.push_back(char(c));
+            mobilinkd::ax25_frame frame(ax25);
+            std::cerr << '\n';
+            mobilinkd::write(std::cerr, frame);
             return true;
         }
+
+        std::cerr << "\nPacket checksum error: " << std::hex << checksum << std::dec << std::endl;
 
         return false;
     }
 
     size_t frame_number = (packet_segment[25] & 0x7F) >> 2;
-    if (frame_number != packet_frame_counter++)
+    if (frame_number != packet_frame_counter)
     {
-        std::cerr << "\nPacket frame sequence error\n";
+        std::cerr << "\nPacket frame sequence error. Got " << frame_number << ", expected " << packet_frame_counter << "\n";
         return false;
     }
+
+    packet_frame_counter += 1;
 
     for (size_t i = 0; i != 25; ++i)
     {
@@ -293,6 +281,7 @@ int main(int argc, char* argv[])
 
     M17Demodulator<FloatType> demod(handle_frame);
 
+#if 0
     if (display_diags)
     {
         std::cerr << "Size of M17Demodulator: " << sizeof(demod) << std::endl;
@@ -301,13 +290,17 @@ int main(int argc, char* argv[])
         std::cerr << "        Size of PolynomialInterleaver<45, 92, 368>: " << sizeof(PolynomialInterleaver<45, 92, 368>) << std::endl;
         std::cerr << "        Size of Trellis<4,2>: " << sizeof(Trellis<4,2>) << std::endl;
         std::cerr << "        Size of Viterbi<Trellis<4,2>, 4>: " << sizeof(Viterbi<Trellis<4,2>, 4>) << std::endl;
-        std::cerr << "        Size of CRC16<0x5935, 0xFFFF>: " << sizeof(CRC16<0x5935, 0xFFFF>) << std::endl;
-        std::cerr << "    Size of M17 filter bank: " << detail::Taps<double>::rrc_taps.size() << std::endl;
+        std::cerr << "        Size of output_buffer_t: " << sizeof(M17FrameDecoder::output_buffer_t) << std::endl;
+        std::cerr << "        Size of depunctured_buffer_t: " << sizeof(M17FrameDecoder::depunctured_buffer_t) << std::endl;
+        std::cerr << "        Size of decode_buffer_t: " << sizeof(M17FrameDecoder::decode_buffer_t) << std::endl;
+        std::cerr << "    Size of M17 Matched Filter: " << sizeof(BaseFirFilter<FloatType, detail::Taps<double>::rrc_taps.size()>) << std::endl;
         std::cerr << "    Size of M17 Correlator: " << sizeof(Correlator<FloatType>) << std::endl;
         std::cerr << "    Size of M17 SyncWord: " << sizeof(SyncWord<Correlator<FloatType>>) << std::endl;
         std::cerr << "    Size of M17 DataCarrierDetect: " << sizeof(DataCarrierDetect<FloatType, 48000, 500>) << std::endl;
         std::cerr << "    Size of M17 ClockRecovery: " << sizeof(ClockRecovery<FloatType, 48000, 4800>) << std::endl;
+        std::cerr << "    Size of M17 M17Framer: " << sizeof(M17Framer<368>) << std::endl;
     }
+#endif
 
     demod.diagnostics(diagnostic_callback<FloatType>);
 
