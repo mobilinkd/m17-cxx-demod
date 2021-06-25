@@ -254,7 +254,7 @@ void diagnostic_callback(bool dcd, FloatType evm, FloatType deviation, FloatType
         << ", evm: " << std::setfill(' ') << std::setprecision(4) << std::setw(8) << evm * 100 <<"%"
         << ", deviation: " << std::setprecision(4) << std::setw(8) << deviation
         << ", freq offset: " << std::setprecision(4) << std::setw(8) << offset
-        << ", locked: " << std::boolalpha << std::setw(6) << locked
+        << ", locked: " << std::boolalpha << std::setw(6) << locked << std::dec
         << ", clock: " << std::setprecision(7) << std::setw(8) << clock
         << ", sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
         << ", cost: " << viterbi_cost << "         "  << std::ends;
