@@ -107,3 +107,99 @@ TEST_F(UtilTest, puncture_bytes)
     EXPECT_EQ(get_bit_index(out, 54), 1);
     EXPECT_EQ(get_bit_index(out, 55), 0);
 }
+
+TEST_F(UtilTest, llr_size)
+{
+    auto s = mobilinkd::detail::llr_size<4>();
+    EXPECT_EQ(s, 43) << "size = " << s;
+}
+
+TEST_F(UtilTest, llr_not_zero)
+{
+    for (float i = -4.0; i < 4.0; i += 0.1)
+    {
+        auto [a, b] = mobilinkd::llr<float, 4>(i);
+        EXPECT_NE(int(a), 0) << i << ", a = " << int(a);
+        EXPECT_NE(int(b), 0) << i << ", b = " << int(b);
+    }
+}
+
+TEST_F(UtilTest, llr_near_zero)
+{
+    {
+        float v = 0.0001;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), -1) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -7) << v << ", b = " << int(b);
+    }
+    {
+        float v = -0.0001;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), 1) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -7) << v << ", b = " << int(b);
+    }
+}
+
+TEST_F(UtilTest, llr_near_one)
+{
+    {
+        float v = 1.0001;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), -7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -7) << v << ", b = " << int(b);
+    }
+    {
+        float v = 0.9999;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), -7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -7) << v << ", b = " << int(b);
+    }
+}
+
+TEST_F(UtilTest, llr_near_two)
+{
+    {
+        float v = 2.0001;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), -7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), 1) << v << ", b = " << int(b);
+    }
+    {
+        float v = 1.9999;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), -7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -1) << v << ", b = " << int(b);
+    }
+}
+
+TEST_F(UtilTest, llr_near_minus_one)
+{
+    {
+        float v = -1.0001;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), 7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -7) << v << ", b = " << int(b);
+    }
+    {
+        float v = -0.9999;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), 7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -7) << v << ", b = " << int(b);
+    }
+}
+
+TEST_F(UtilTest, llr_near_minus_two)
+{
+    {
+        float v = -2.0001;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), 7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), 1) << v << ", b = " << int(b);
+    }
+    {
+        float v = -1.9999;
+        auto [a, b] = mobilinkd::llr<float, 4>(v);
+        EXPECT_EQ(int(a), 7) << v << ", a = " << int(a);
+        EXPECT_EQ(int(b), -1) << v << ", b = " << int(b);
+    }
+}

@@ -7,6 +7,7 @@
 #include "Util.h"
 
 #include <limits>
+#include <cmath>
 
 namespace mobilinkd
 {
@@ -104,7 +105,7 @@ struct Viterbi
         prevMetrics[0] = 0;     // Starting point.
 
         std::array<std::bitset<NumStates>, IN / 2> history;
-        // history.fill(0);
+        history.fill(0);
 
         constexpr size_t BUTTERFLY_SIZE = NumStates / 2;
 
@@ -120,10 +121,18 @@ struct Viterbi
 
             for (size_t j = 0; j != BUTTERFLY_SIZE; ++j)
             {
-                int16_t c = std::abs(cost_[j][0] - s0) + std::abs(cost_[j][1] - s1);
-                cost0[j] = c;
-                // cost1[j] = METRIC - c;
-                cost1[j] = std::abs(cost_[j][0] + s0) + std::abs(cost_[j][1] + s1);
+                cost0[j] = 0;
+                cost1[j] = 0;
+                if (s0)
+                {
+                    cost0[j] += std::abs(cost_[j][0] - s0);
+                    cost1[j] += std::abs(cost_[j][0] + s0);
+                }
+                if (s1)
+                {
+                    cost0[j] += std::abs(cost_[j][1] - s1);
+                    cost1[j] += std::abs(cost_[j][1] + s1);
+                }
             }
             
             for (size_t j = 0; j != BUTTERFLY_SIZE; ++j)
@@ -167,7 +176,7 @@ struct Viterbi
             }
         }
 
-        size_t ber = min_cost / (METRIC >> 1); // Cost is at least equal to # of erasures.
+        size_t ber = std::round(min_cost / float(detail::llr_limit<LLR_>())); // Cost is at least equal to # of erasures.
 
         // Do chainback.
         auto oit = std::rbegin(out);
