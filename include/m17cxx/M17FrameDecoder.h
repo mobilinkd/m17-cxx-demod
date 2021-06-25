@@ -221,7 +221,7 @@ struct M17FrameDecoder
         std::copy(buffer.begin() + 96, buffer.end(), tmp.begin());
 
         auto bit_count = depuncture(tmp, depuncture_buffer.stream, P2);
-        viterbi_cost = viterbi_.decode(depuncture_buffer.stream, decode_buffer.stream) - 28;
+        viterbi_cost = viterbi_.decode(depuncture_buffer.stream, decode_buffer.stream);
         to_byte_array(decode_buffer.stream, output_buffer.stream);
 
         crc_.reset();
