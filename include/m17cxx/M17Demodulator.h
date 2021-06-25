@@ -140,7 +140,7 @@ struct M17Demodulator
 	enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, FRAME };
 
 	BaseFirFilter<FloatType, detail::Taps<FloatType>::rrc_taps.size()> demod_filter{detail::Taps<FloatType>::rrc_taps};
-	DataCarrierDetect<FloatType, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 2.0};
+	DataCarrierDetect<FloatType, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 4.0};
 	ClockRecovery<FloatType, SAMPLE_RATE, SYMBOL_RATE> clock_recovery;
 
 	collelator_t correlator;
