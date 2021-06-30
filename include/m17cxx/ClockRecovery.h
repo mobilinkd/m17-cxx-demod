@@ -227,7 +227,7 @@ public:
      */
     bool update()
     {
-        assert(sample_count_ != 0 && index_ == 0);
+        if (!(sample_count_ != 0 && index_ == 0)) return false;
 
         update_sample_index_();
         update_clock_();
