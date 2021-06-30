@@ -47,11 +47,11 @@ struct M17FrameDecoder
     using output_buffer_t = struct {
         FrameType type;
         union {
-            lsf_buffer_t lsf;
             lich_buffer_t lich;
             audio_buffer_t stream;
             packet_buffer_t packet;
         };
+        lsf_buffer_t lsf;
     };
 
     using depunctured_buffer_t = union {
@@ -79,7 +79,6 @@ struct M17FrameDecoder
     depunctured_buffer_t depuncture_buffer;
     decode_buffer_t decode_buffer;
 
-    std::array<int8_t, 6> lich_buffer;
     uint8_t lich_segments{0};       ///< one bit per received LICH fragment.
 
     M17FrameDecoder(callback_t callback)
@@ -166,13 +165,13 @@ struct M17FrameDecoder
             // append codeword.
             if (i & 1)
             {
-                lich_buffer[index++] |= (decoded >> 8);     // upper 4 bits
-                lich_buffer[index++] = (decoded & 0xFF);    // lower 8 bits
+                output_buffer.lich[index++] |= (decoded >> 8);     // upper 4 bits
+                output_buffer.lich[index++] = (decoded & 0xFF);    // lower 8 bits
             }
             else
             {
-                lich_buffer[index++] |= (decoded >> 4);     // upper 8 bits
-                lich_buffer[index] = (decoded & 0x0F) << 4; // lower 4 bits
+                output_buffer.lich[index++] |= (decoded >> 4);     // upper 8 bits
+                output_buffer.lich[index] = (decoded & 0x0F) << 4; // lower 4 bits
             }
         }
         return true;
@@ -180,15 +179,18 @@ struct M17FrameDecoder
 
     DecodeResult decode_lich(input_buffer_t& buffer, size_t& viterbi_cost)
     {
-        lich_buffer.fill(0);
+        output_buffer.lich.fill(0);
         // Read the 4 12-bit codewords from LICH into buffers.lich.
         if (!unpack_lich(buffer)) return DecodeResult::FAIL;
 
-        uint8_t fragment_number = lich_buffer[5];   // Get fragment number.
+        output_buffer.type = FrameType::LICH;
+        callback_(output_buffer, 0);
+
+        uint8_t fragment_number = output_buffer.lich[5];   // Get fragment number.
         fragment_number = (fragment_number >> 5) & 7;
 
         // Copy decoded LICH to superframe buffer.
-        std::copy(lich_buffer.begin(), lich_buffer.begin() + 5,
+        std::copy(output_buffer.lich.begin(), output_buffer.lich.begin() + 5,
             output_buffer.lsf.begin() + (fragment_number * 5));
 
         lich_segments |= (1 << fragment_number);        // Indicate segment received.
