@@ -3,6 +3,7 @@
 #include "M17Demodulator.h"
 #include "CRC16.h"
 #include "ax25_frame.h"
+#include "FirFilter.h"
 
 #include <codec2/codec2.h>
 #include <boost/crc.hpp>
@@ -11,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -74,25 +76,28 @@ bool dump_lsf(std::array<T, N> const& lsf)
     
     LinkSetupFrame::encoded_call_t encoded_call;
 
-    std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
-    auto src = LinkSetupFrame::decode_callsign(encoded_call);
-    std::cerr << "\nSRC: ";
-    for (auto x : src) if (x) std::cerr << x;
+    if (display_lsf)
+    {
+        std::copy(lsf.begin() + 6, lsf.begin() + 12, encoded_call.begin());
+        auto src = LinkSetupFrame::decode_callsign(encoded_call);
+        std::cerr << "\nSRC: ";
+        for (auto x : src) if (x) std::cerr << x;
 
-    std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
-    auto dest = LinkSetupFrame::decode_callsign(encoded_call);
-    std::cerr << ", DEST: ";
-    for (auto x : dest) if (x) std::cerr << x;
+        std::copy(lsf.begin(), lsf.begin() + 6, encoded_call.begin());
+        auto dest = LinkSetupFrame::decode_callsign(encoded_call);
+        std::cerr << ", DEST: ";
+        for (auto x : dest) if (x) std::cerr << x;
 
-    uint16_t type = (lsf[12] << 8) | lsf[13];
-    std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
+        uint16_t type = (lsf[12] << 8) | lsf[13];
+        std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
 
-    std::cerr << ", NONCE: ";
-    for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
+        std::cerr << ", NONCE: ";
+        for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
 
-    uint16_t crc = (lsf[28] << 8) | lsf[29];
-    std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
-    std::cerr << std::dec << std::endl;
+        uint16_t crc = (lsf[28] << 8) | lsf[29];
+        std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
+        std::cerr << std::dec << std::endl;
+    }
 
     current_packet.clear();
     packet_frame_counter = 0;
@@ -124,16 +129,25 @@ bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, i
 
     std::array<int16_t, 160> buf;
     // First two bytes are the frame counter + EOS indicator.
-    if (viterbi_cost < 36 && (audio[0] & 0x80))
+    if (viterbi_cost < 70 && (audio[0] & 0x80))
     {
         if (display_lsf) std::cerr << "\nEOS" << std::endl;
         result = false;
     }
 
-    codec2_decode(codec2, buf.begin(), audio.begin() + 2);
-    std::cout.write((const char*)buf.begin(), 320);
-    codec2_decode(codec2, buf.begin(), audio.begin() + 10);
-    std::cout.write((const char*)buf.begin(), 320);
+    if (viterbi_cost < 70)
+    {
+        codec2_decode(codec2, buf.begin(), audio.begin() + 2);
+        std::cout.write((const char*)buf.begin(), 320);
+        codec2_decode(codec2, buf.begin(), audio.begin() + 10);
+        std::cout.write((const char*)buf.begin(), 320);
+    }
+    else
+    {
+        buf.fill(0);
+        std::cout.write((const char*)buf.begin(), 320);
+        std::cout.write((const char*)buf.begin(), 320);
+    }
 
     return result;
 }
@@ -230,7 +244,7 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
             result = dump_lsf(frame.lsf);
             break;
         case FrameType::LICH:
-            std::cout << "LICH" << std::endl;
+            std::cerr << "LICH" << std::endl;
             break;
         case FrameType::STREAM:
             result = demodulate_audio(frame.stream, viterbi_cost);
@@ -304,6 +318,10 @@ int main(int argc, char* argv[])
 
     demod.diagnostics(diagnostic_callback<FloatType>);
 
+    // std::ofstream out("stream.out");
+    // auto old_rdbuf = std::clog.rdbuf();
+    // std::clog.rdbuf(out.rdbuf());
+
     while (std::cin)
     {
         int16_t sample;
@@ -315,6 +333,8 @@ int main(int argc, char* argv[])
     std::cerr << std::endl;
 
     codec2_destroy(codec2);
+
+    // std::clog.rdbuf(old_rdbuf);
 
     return EXIT_SUCCESS;
 }
