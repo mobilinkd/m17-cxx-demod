@@ -6,12 +6,22 @@
 #include "Convolution.h"
 #include "Util.h"
 
-#include <limits>
+#include <array>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <limits>
 
 namespace mobilinkd
 {
 
+/**
+ * Compile-time build of the trellis forward state transitions.
+ *
+ * @param is the trellis -- used only for type deduction.
+ * @return a 2-D array of source, dest, cost.
+ */
 template <typename Trellis_>
 constexpr std::array<std::array<uint8_t, (1 << Trellis_::k)>, (1 << Trellis_::K)> makeNextState(Trellis_)
 {
@@ -26,6 +36,14 @@ constexpr std::array<std::array<uint8_t, (1 << Trellis_::k)>, (1 << Trellis_::K)
     return result;
 }
 
+
+/**
+ * Compile-time build of the trellis reverse state transitions, for efficient
+ * reverse traversal during chainback.
+ *
+ * @param is the trellis -- used only for type deduction.
+ * @return a 2-D array of dest, source, cost.
+ */
 template <typename Trellis_>
 constexpr std::array<std::array<uint8_t, (1 << Trellis_::k)>, (1 << Trellis_::K)> makePrevState(Trellis_)
 {
@@ -45,6 +63,12 @@ constexpr std::array<std::array<uint8_t, (1 << Trellis_::k)>, (1 << Trellis_::K)
     return result;
 }
 
+/**
+ * Compile-time generation of the trellis path cost for LLR.
+ *
+ * @param trellis
+ * @return
+ */
 template <typename Trellis_, size_t LLR = 2>
 constexpr auto makeCost(Trellis_ trellis)
 {
@@ -63,6 +87,10 @@ constexpr auto makeCost(Trellis_ trellis)
     return result;
 }
 
+/**
+ * Soft decision Viterbi algorithm based on the trellis and LLR size.
+ *
+ */
 template <typename Trellis_, size_t LLR_ = 2>
 struct Viterbi
 {
@@ -84,28 +112,65 @@ struct Viterbi
     state_transition_t nextState_;
     state_transition_t prevState_;
 
+    metrics_t prevMetrics, currMetrics;
+
+    // This is the maximum amount of storage needed for M17.  If used for
+    // other modes, this may need to be increased.  This will never overflow
+    // because of a static assertion in the decode() function.
+    std::array<std::bitset<NumStates>, 244> history_;
+
     Viterbi(Trellis_ trellis)
     : cost_(makeCost<Trellis_, LLR_>(trellis))
     , nextState_(makeNextState(trellis))
     , prevState_(makePrevState(trellis))
     {}
 
+    void calculate_path_metric(
+        const std::array<int16_t, NumStates / 2>& cost0,
+        const std::array<int16_t, NumStates / 2>& cost1,
+        std::bitset<NumStates>& hist,
+        size_t j
+    ) {
+        auto& i0 = nextState_[j][0];
+        auto& i1 = nextState_[j][1];
+
+        auto& c0 = cost0[j];
+        auto& c1 = cost1[j];
+
+        auto& p0 = prevMetrics[j];
+        auto& p1 = prevMetrics[j + NumStates / 2];
+
+        int32_t m0 = p0 + c0;
+        int32_t m1 = p0 + c1;
+        int32_t m2 = p1 + c1;
+        int32_t m3 = p1 + c0;
+
+        bool d0 = m0 > m2;
+        bool d1 = m1 > m3;
+
+        hist.set(i0, d0);
+        hist.set(i1, d1);
+        currMetrics[i0] = d0 ? m2 : m0;
+        currMetrics[i1] = d1 ? m3 : m1;
+    }
+
     /**
      * Viterbi soft decoder using LLR inputs where 0 == erasure.
      * 
-     * @return path metric for computing BER.
+     * @return path metric for estimating BER.
      */
     template <size_t IN, size_t OUT>
-    size_t decode(std::array<int8_t, IN> in, std::array<uint8_t, OUT>& out)
+    size_t decode(std::array<int8_t, IN> const& in, std::array<uint8_t, OUT>& out)
     {
+        static_assert(sizeof(history_) >= IN / 2);
+
         constexpr auto MAX_METRIC = std::numeric_limits<typename metrics_t::value_type>::max() / 2;
 
-        metrics_t prevMetrics, currMetrics;
         prevMetrics.fill(MAX_METRIC);
         prevMetrics[0] = 0;     // Starting point.
 
-        std::array<std::bitset<NumStates>, IN / 2> history;
-        history.fill(0);
+        auto hbegin = history_.begin();
+        auto hend = history_.begin() + IN / 2;
 
         constexpr size_t BUTTERFLY_SIZE = NumStates / 2;
 
@@ -113,22 +178,21 @@ struct Viterbi
         std::array<int16_t, BUTTERFLY_SIZE> cost0;
         std::array<int16_t, BUTTERFLY_SIZE> cost1;
 
-        for (size_t i = 0; i != IN; i += 2)
+        for (size_t i = 0; i != IN; i += 2, hindex += 1)
         {
-            auto& hist = history[hindex];
             int16_t s0 = in[i];
             int16_t s1 = in[i + 1];
+            cost0.fill(0);
+            cost1.fill(0);
 
             for (size_t j = 0; j != BUTTERFLY_SIZE; ++j)
             {
-                cost0[j] = 0;
-                cost1[j] = 0;
-                if (s0)
+                if (s0) // is not erased
                 {
-                    cost0[j] += std::abs(cost_[j][0] - s0);
-                    cost1[j] += std::abs(cost_[j][0] + s0);
+                    cost0[j] = std::abs(cost_[j][0] - s0);
+                    cost1[j] = std::abs(cost_[j][0] + s0);
                 }
-                if (s1)
+                if (s1) // is not erased
                 {
                     cost0[j] += std::abs(cost_[j][1] - s1);
                     cost1[j] += std::abs(cost_[j][1] + s1);
@@ -137,33 +201,13 @@ struct Viterbi
             
             for (size_t j = 0; j != BUTTERFLY_SIZE; ++j)
             {
-                auto& i0 = nextState_[j][0];
-                auto& i1 = nextState_[j][1];
-
-                int16_t c0 = cost0[j];
-                int16_t c1 = cost1[j];
-
-                auto& p0 = prevMetrics[j];
-                auto& p1 = prevMetrics[j + BUTTERFLY_SIZE];
-
-                int32_t m0 = p0 + c0;
-                int32_t m1 = p0 + c1;
-                int32_t m2 = p1 + c1;
-                int32_t m3 = p1 + c0;
-
-                bool d0 = m0 > m2;
-                bool d1 = m1 > m3;
-
-                hist.set(i0, d0);
-                hist.set(i1, d1);
-                currMetrics[i0] = d0 ? m2 : m0;
-                currMetrics[i1] = d1 ? m3 : m1;
+                calculate_path_metric(cost0, cost1, history_[hindex], j);
             }
             std::swap(currMetrics, prevMetrics);
-            hindex += 1;
         }
 
         // Find starting point. Should be 0 for properly flushed CCs.
+        // However, 0 may not be the path with the fewest errors.
         size_t min_element = 0;
         int32_t min_cost = prevMetrics[0];
 
@@ -176,21 +220,22 @@ struct Viterbi
             }
         }
 
-        size_t ber = std::round(min_cost / float(detail::llr_limit<LLR_>())); // Cost is at least equal to # of erasures.
+        size_t cost = std::round(min_cost / float(detail::llr_limit<LLR_>()));
 
         // Do chainback.
         auto oit = std::rbegin(out);
-        auto hit = std::rbegin(history);
+        auto hit = std::make_reverse_iterator(hend);        // rbegin
+        auto hrend = std::make_reverse_iterator(hbegin);    // rend
         size_t next_element = min_element;
         size_t index = IN / 2;
-        while (oit != std::rend(out) && hit != std::rend(history))
+        while (oit != std::rend(out) && hit != hrend)
         {
             auto v = (*hit++)[next_element];
             if (index-- <= OUT) *oit++ = next_element & 1;
             next_element = prevState_[next_element][v];
         }
 
-        return ber;
+        return cost;
     }
 };
 
