@@ -41,7 +41,7 @@ struct M17FrameDecoder
 
     using lsf_buffer_t = std::array<uint8_t, 30>;
     using lich_buffer_t = std::array<uint8_t, 6>;
-    using audio_buffer_t = std::array<uint8_t, 20>;
+    using audio_buffer_t = std::array<uint8_t, 18>;
     using packet_buffer_t = std::array<uint8_t, 26>;
 
     using output_buffer_t = struct {
@@ -56,13 +56,13 @@ struct M17FrameDecoder
 
     using depunctured_buffer_t = union {
         std::array<int8_t, 488> lsf;
-        std::array<int8_t, 328> stream;
+        std::array<int8_t, 296> stream;
         std::array<int8_t, 420> packet;
     };
 
     using decode_buffer_t = union {
         std::array<uint8_t, 240> lsf;
-        std::array<uint8_t, 160> stream;
+        std::array<uint8_t, 144> stream;
         std::array<uint8_t, 206> packet;
     };
 
@@ -226,11 +226,7 @@ struct M17FrameDecoder
         viterbi_cost = viterbi_.decode(depuncture_buffer.stream, decode_buffer.stream);
         to_byte_array(decode_buffer.stream, output_buffer.stream);
 
-        crc_.reset();
-        for (auto x : output_buffer.stream) crc_(x);
-        auto checksum = crc_.get();
-
-        if ((checksum == 0) && (output_buffer.stream[0] & 0x80))
+        if ((viterbi_cost < 60) && (output_buffer.stream[0] & 0x80))
         {
             state_ = State::LSF;
         }
