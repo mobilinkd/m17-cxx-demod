@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <type_traits>
 #include <tuple>
+#include <limits>
 
 namespace mobilinkd {
 

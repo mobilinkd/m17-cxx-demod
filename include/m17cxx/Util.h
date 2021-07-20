@@ -8,6 +8,7 @@
 #include <array>
 #include <bitset>
 #include <tuple>
+#include <limits>
 
 
 namespace mobilinkd
