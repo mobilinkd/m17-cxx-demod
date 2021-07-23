@@ -3,7 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
-#include <cstdint>
+#include <functional>
 
 // make CXXFLAGS="$(pkg-config --cflags gtest) $(pkg-config --libs gtest) -I. -O3 -std=c++17" tests/SlidingDFTTest
 
