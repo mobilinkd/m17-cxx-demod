@@ -364,13 +364,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 	if (sync_updated < 0)   // Stream sync word
 	{
 		missing_sync_count = 0;
-		if (sync_count <= 70)
-		{
-			update_values(sync_index);
-			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
-			demodState = DemodState::FRAME;
-		}
-		else if (sync_count > 70)
+		if (sync_count > 70)
 		{
 			update_values(sync_index);
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
