@@ -24,7 +24,7 @@ inline constexpr auto P1 = std::experimental::make_array<int8_t>(
     0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1,
     1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1);
 
-/// Puncture matrix for audio frames.
+/// Puncture matrix for audio frames. Rate 6/11.
 inline constexpr auto P2 = std::experimental::make_array<int8_t>(
     1, 1, 1, 1, 1, 1,
     1, 1, 1, 1, 1, 0);
