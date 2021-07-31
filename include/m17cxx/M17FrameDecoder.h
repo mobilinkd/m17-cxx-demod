@@ -14,6 +14,7 @@
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <iostream>
 
 extern bool display_lsf;
 
@@ -27,10 +28,10 @@ struct M17FrameDecoder
     Viterbi<decltype(trellis_), 4> viterbi_{trellis_};
     CRC16<0x5935, 0xFFFF> crc_;
  
-    enum class State {LSF, STREAM, BASIC_PACKET, FULL_PACKET};
-    enum class SyncWordType { LSF, STREAM, PACKET, RESERVED };
+    enum class State { LSF, STREAM, BASIC_PACKET, FULL_PACKET, BERT };
+    enum class SyncWordType { LSF, STREAM, PACKET, BERT };
     enum class DecodeResult { FAIL, OK, EOS, INCOMPLETE, PACKET_INCOMPLETE };
-    enum class FrameType { LSF, LICH, STREAM, BASIC_PACKET, FULL_PACKET };
+    enum class FrameType { LSF, LICH, STREAM, BASIC_PACKET, FULL_PACKET, BERT };
 
     State state_ = State::LSF;
 
@@ -43,6 +44,7 @@ struct M17FrameDecoder
     using lich_buffer_t = std::array<uint8_t, 6>;
     using audio_buffer_t = std::array<uint8_t, 18>;
     using packet_buffer_t = std::array<uint8_t, 26>;
+    using bert_buffer_t = std::array<uint8_t, 25>;
 
     using output_buffer_t = struct {
         FrameType type;
@@ -50,6 +52,7 @@ struct M17FrameDecoder
             lich_buffer_t lich;
             audio_buffer_t stream;
             packet_buffer_t packet;
+            bert_buffer_t bert;
         };
         lsf_buffer_t lsf;
     };
@@ -58,12 +61,14 @@ struct M17FrameDecoder
         std::array<int8_t, 488> lsf;
         std::array<int8_t, 296> stream;
         std::array<int8_t, 420> packet;
+        std::array<int8_t, 402> bert;
     };
 
     using decode_buffer_t = union {
         std::array<uint8_t, 240> lsf;
         std::array<uint8_t, 144> stream;
         std::array<uint8_t, 206> packet;
+        std::array<uint8_t, 197> bert;
     };
 
     /**
@@ -78,6 +83,7 @@ struct M17FrameDecoder
     output_buffer_t output_buffer;
     depunctured_buffer_t depuncture_buffer;
     decode_buffer_t decode_buffer;
+    uint16_t frame_number = 0;
 
     uint8_t lich_segments{0};       ///< one bit per received LICH fragment.
 
@@ -89,7 +95,9 @@ struct M17FrameDecoder
     {
         if (lsf_output[111]) // LSF type bit 0
         {
-            state_ = State::STREAM;
+            if (lsf_output[109] != 0) {
+                state_ = State::STREAM;
+            }
         }
         else    // packet frame comes next.
         {
@@ -217,6 +225,18 @@ struct M17FrameDecoder
         return DecodeResult::INCOMPLETE;
     }
 
+    DecodeResult decode_bert(input_buffer_t& buffer, size_t& viterbi_cost)
+    {
+        auto bit_count = depuncture(buffer, depuncture_buffer.bert, P2);
+        viterbi_cost = viterbi_.decode(depuncture_buffer.bert, decode_buffer.bert);
+        to_byte_array(decode_buffer.bert, output_buffer.bert);
+
+        output_buffer.type = FrameType::BERT;
+        callback_(output_buffer, viterbi_cost);
+
+        return DecodeResult::OK;
+    }
+
     DecodeResult decode_stream(input_buffer_t& buffer, size_t& viterbi_cost)
     {
         std::array<int8_t, 272> tmp;
@@ -332,9 +352,9 @@ struct M17FrameDecoder
                 state_ = State::LSF;
             }
             break;
-        case SyncWordType::RESERVED:
-            state_ = State::LSF;
-            break;
+        case SyncWordType::BERT:
+            state_ = State::BERT;
+            return decode_bert(buffer, viterbi_cost);
         }
 
         return DecodeResult::FAIL;

@@ -137,7 +137,7 @@ struct M17Demodulator
 	using callback_t = M17FrameDecoder::callback_t;
 	using diagnostic_callback_t = std::function<void(bool, FloatType, FloatType, FloatType, bool, FloatType, int, int, int, int)>;
 
-	enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, FRAME };
+	enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, BERT_SYNC, FRAME };
 
 	BaseFirFilter<FloatType, detail::Taps<FloatType>::rrc_taps.size()> demod_filter{detail::Taps<FloatType>::rrc_taps};
 	DataCarrierDetect<FloatType, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 4.0};
@@ -145,8 +145,8 @@ struct M17Demodulator
 
 	collelator_t correlator;
 	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};
-	sync_word_t lsf_sync{{+3,+3,+3,+3,-3,-3,+3,-3}, 32.f, -31.f};
-	sync_word_t packet_sync{{3,-3,3,3,-3,-3,-3,-3}, 31.f};
+	sync_word_t lsf_sync{{+3,+3,+3,+3,-3,-3,+3,-3}, 32.f, -31.f};	// LSF or STREAM (inverted)
+	sync_word_t packet_sync{{3,-3,3,3,-3,-3,-3,-3}, 31.f, -31.f};	// PACKET or BERT (inverted)
 
 	FreqDevEstimator<FloatType> dev;
 	FloatType idev;
@@ -184,6 +184,7 @@ struct M17Demodulator
 	void do_lsf_sync();
 	void do_packet_sync();
 	void do_stream_sync();
+	void do_bert_sync();
 	void do_frame(FloatType filtered_sample);
 
 	bool locked() const
@@ -276,28 +277,43 @@ void M17Demodulator<FloatType>::do_unlocked()
 			sample_index = sync_index;
 			demodState = DemodState::LSF_SYNC;
 		}
+		return;
 	}
-	else // Otherwise we start searching for a sync word.
+	auto sync_index = lsf_sync(correlator);
+	auto sync_updated = lsf_sync.updated();
+	if (sync_updated)
 	{
-		auto sync_index = lsf_sync(correlator);
-		auto sync_updated = lsf_sync.updated();
-		if (sync_updated)
+		sync_count = 0;
+		missing_sync_count = 0;
+		need_clock_reset_ = true;
+		update_values(sync_index);
+		sample_index = sync_index;
+		dev.reset();
+		demodState = DemodState::FRAME;
+		if (sync_updated < 0)
 		{
-			sync_count = 0;
-			missing_sync_count = 0;
-			need_clock_reset_ = true;
-			update_values(sync_index);
-			sample_index = sync_index;
-			dev.reset();
-			demodState = DemodState::FRAME;
-			if (sync_updated < 0)
-			{
-				sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
-			}
-			else
-			{
-				sync_word_type = M17FrameDecoder::SyncWordType::LSF;
-			}
+			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+		}
+		else
+		{
+			sync_word_type = M17FrameDecoder::SyncWordType::LSF;
+		}
+		return;
+	}
+	sync_index = packet_sync(correlator);
+	sync_updated = packet_sync.updated();
+	if (sync_updated < 0)
+	{
+		sync_count = 0;
+		missing_sync_count = 0;
+		need_clock_reset_ = true;
+		update_values(sync_index);
+		sample_index = sync_index;
+		dev.reset();
+		demodState = DemodState::FRAME;
+		if (sync_updated < 0)
+		{
+			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 		}
 	}
 }
@@ -311,6 +327,7 @@ template <typename FloatType>
 void M17Demodulator<FloatType>::do_lsf_sync()
 {
 	FloatType sync_triggered = 0.;
+	FloatType bert_triggered = 0.;
 
 	if (correlator.index() == sample_index)
 	{
@@ -321,7 +338,16 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 			return;
 		}
 		sync_triggered = lsf_sync.triggered(correlator);
-		if (sync_triggered != 0)
+		bert_triggered = packet_sync.triggered(correlator);
+		if (bert_triggered < 0)
+		{
+			missing_sync_count = 0;
+			need_clock_update_ = true;
+			update_values(sample_index);
+			demodState = DemodState::FRAME;
+			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+		}
+		else if (sync_triggered != 0)
 		{
 			missing_sync_count = 0;
 			need_clock_update_ = true;
@@ -420,6 +446,37 @@ void M17Demodulator<FloatType>::do_packet_sync()
 	}
 }
 
+/**
+ * Check for a bert sync word.
+ */
+template <typename FloatType>
+void M17Demodulator<FloatType>::do_bert_sync()
+{
+	auto sync_index = packet_sync(correlator);
+	auto sync_updated = packet_sync.updated();
+	sync_count += 1;
+	if (sync_count > 70 && sync_updated < 0)
+	{
+		missing_sync_count = 0;
+		update_values(sync_index);
+		sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+		demodState = DemodState::FRAME;
+	}
+	else if (sync_count > 87)
+	{
+		missing_sync_count += 1;
+		if (missing_sync_count < MAX_MISSING_SYNC)
+		{
+			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+			demodState = DemodState::FRAME;
+		}
+		else
+		{
+			demodState = DemodState::UNLOCKED;
+		}
+	}
+}
+
 
 template <typename FloatType>
 void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
@@ -449,6 +506,9 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 		case M17FrameDecoder::State::LSF:
 			// If state == LSF, we need to recover LSF from LICH.
 			demodState = DemodState::STREAM_SYNC;
+			break;
+		case M17FrameDecoder::State::BERT:
+			demodState = DemodState::BERT_SYNC;
 			break;
 		default:
 			demodState = DemodState::PACKET_SYNC;
@@ -556,6 +616,9 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 		break;
 	case DemodState::PACKET_SYNC:
 		do_packet_sync();
+		break;
+	case DemodState::BERT_SYNC:
+		do_bert_sync();
 		break;
 	case DemodState::FRAME:
 		do_frame(filtered_sample);

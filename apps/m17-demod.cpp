@@ -7,6 +7,8 @@
 
 #include <codec2/codec2.h>
 #include <boost/crc.hpp>
+#include <boost/program_options.hpp>
+#include <boost/optional.hpp>
 
 #include <array>
 #include <cstddef>
@@ -17,9 +19,12 @@
 #include <iostream>
 #include <vector>
 
+const char VERSION[] = "2.2";
 
 bool display_lsf = false;
 bool invert_input = false;
+bool quiet = false;
+bool debug = false;
 
 struct CODEC2 *codec2;
 
@@ -27,6 +32,8 @@ std::vector<uint8_t> current_packet;
 size_t packet_frame_counter = 0;
 mobilinkd::CRC16<0x1021, 0xFFFF> packet_crc;
 mobilinkd::CRC16<0x5935, 0xFFFF> stream_crc;
+
+mobilinkd::PRBS9 prbs;
 
 template <typename T, size_t N>
 std::vector<uint8_t> to_packet(std::array<T, N> in)
@@ -232,6 +239,26 @@ bool decode_full_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packe
     return true;
 }
 
+bool decode_bert(mobilinkd::M17FrameDecoder::bert_buffer_t const& bert)
+{
+    for (int j = 0; j != 24; ++j) {
+        auto b = bert[j];
+        for (int i = 0; i != 8; ++i) {
+            prbs(b & 0x80);
+            b <<= 1;
+        }
+    }
+
+    auto b = bert[24];
+    for (int i = 0; i != 5; ++i)
+    {
+        prbs(b & 0x80);
+        b <<= 1;
+    }
+
+    return true;
+}
+
 bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int viterbi_cost)
 {
     using FrameType = mobilinkd::M17FrameDecoder::FrameType;
@@ -255,6 +282,9 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
         case FrameType::FULL_PACKET:
             result = decode_packet(frame.packet);
             break;
+        case FrameType::BERT:
+            result = decode_bert(frame.bert);
+            break;
     }
 
     return result;
@@ -264,30 +294,111 @@ template <typename FloatType>
 void diagnostic_callback(bool dcd, FloatType evm, FloatType deviation, FloatType offset, bool locked,
     FloatType clock, int sample_index, int sync_index, int clock_index, int viterbi_cost)
 {
-    std::cerr << "\rdcd: " << std::setw(1) << int(dcd)
-        << ", evm: " << std::setfill(' ') << std::setprecision(4) << std::setw(8) << evm * 100 <<"%"
-        << ", deviation: " << std::setprecision(4) << std::setw(8) << deviation
-        << ", freq offset: " << std::setprecision(4) << std::setw(8) << offset
-        << ", locked: " << std::boolalpha << std::setw(6) << locked << std::dec
-        << ", clock: " << std::setprecision(7) << std::setw(8) << clock
-        << ", sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
-        << ", cost: " << viterbi_cost << "         "  << std::ends;
+    if (debug) {
+        std::cerr << "\rdcd: " << std::setw(1) << int(dcd)
+            << ", evm: " << std::setfill(' ') << std::setprecision(4) << std::setw(8) << evm * 100 <<"%"
+            << ", deviation: " << std::setprecision(4) << std::setw(8) << deviation
+            << ", freq offset: " << std::setprecision(4) << std::setw(8) << offset
+            << ", locked: " << std::boolalpha << std::setw(6) << locked << std::dec
+            << ", clock: " << std::setprecision(7) << std::setw(8) << clock
+            << ", sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
+            << ", cost: " << viterbi_cost;
+    }
+        
+    if (!dcd && prbs.sync()) { // Seems like there should be a better way to do this.
+        prbs.reset();
+    }
+
+    if (prbs.sync() && !quiet) {
+        if (!debug) {
+            std::cerr << '\r';
+        } else {
+            std::cerr << ", ";
+        }
+    
+        auto ber = double(prbs.errors()) / double(prbs.bits());
+        char buffer[40];
+        snprintf(buffer, 40, "BER: %-1.6lf (%lu bits)", ber, prbs.bits());
+        std::cerr << buffer;
+    }
+    std::cerr << std::flush;
 }
 
+struct Config
+{
+    bool verbose = false;
+    bool debug = false;
+    bool quiet = false;
+    bool invert = false;
+    bool lsf = false;
+
+    static std::optional<Config> parse(int argc, char* argv[])
+    {
+        namespace po = boost::program_options;
+
+        Config result;
+
+        // Declare the supported options.
+        po::options_description desc(
+            "Program options");
+        desc.add_options()
+            ("help,h", "Print this help message and exit.")
+            ("version,V", "Print the application verion and exit.")
+            ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (ignored for bitstream)")
+            ("lsf,l", po::bool_switch(&result.lsf), "display the decoded LSF")
+            ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
+            ("debug,d", po::bool_switch(&result.debug), "debug-level output")
+            ("quiet,q", po::bool_switch(&result.quiet), "silence all output -- no BERT output")
+            ;
+
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+
+        if (vm.count("help"))
+        {
+            std::cout << "Read M17 baseband from STDIN and write audio to STDOUT\n"
+                << desc << std::endl;
+
+            return std::nullopt;
+        }
+
+        if (vm.count("version"))
+        {
+            std::cout << argv[0] << ": " << VERSION << std::endl;
+            return std::nullopt;
+        }
+
+        try {
+            po::notify(vm);
+        } catch (std::exception& ex)
+        {
+            std::cerr << ex.what() << std::endl;
+            std::cout << desc << std::endl;
+            return std::nullopt;
+        }
+
+        if (result.debug + result.verbose + result.quiet > 1)
+        {
+            std::cerr << "Only one of quiet, verbos or debug may be chosen." << std::endl;
+            return std::nullopt;
+        }
+
+        return result;
+    }
+};
 
 int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
     using namespace std::string_literals;
 
-    bool display_diags = false;
-    for (size_t i = 1; i != argc; ++i)
-    {
-        if (argv[i] == "-d"s) display_diags = true;
-        if (argv[i] == "-l"s) display_lsf = true;
-        if (argv[i] == "-i"s) invert_input = true;
+    auto config = Config::parse(argc, argv);
+    if (!config) return 0;
 
-    }
+    display_lsf = config->lsf;
+    invert_input = config->invert;
+    quiet = config->quiet;
+    debug = config->debug;
 
     codec2 = ::codec2_create(CODEC2_MODE_3200);
 

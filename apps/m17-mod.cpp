@@ -60,7 +60,7 @@ const auto rrc_taps = std::experimental::make_array<double>(
 const auto evm_b = std::experimental::make_array<double>(0.02008337, 0.04016673, 0.02008337);
 const auto evm_a = std::experimental::make_array<double>(1.0, -1.56101808, 0.64135154);
 
-const char VERSION[] = "1.0";
+const char VERSION[] = "2.2";
 
 struct Config
 {
@@ -73,6 +73,8 @@ struct Config
     bool debug = false;
     bool quiet = false;
     bool bitstream = false; // default is baseband audio
+    bool bert = false; // Bit error rate testing.
+    bool invert = false;
 
     static std::optional<Config> parse(int argc, char* argv[])
     {
@@ -98,6 +100,9 @@ struct Config
                 "Linux event code for PTT (default is RADIO).")
             ("bitstream,b", po::bool_switch(&result.bitstream),
                 "output bitstream (default is baseband).")
+            ("bert,B", po::bool_switch(&result.bert),
+                "output a bit error rate test stream (default is read audio from STDIN).")
+            ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (ignored for bitstream)")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
             ("quiet,q", po::bool_switch(&result.quiet), "silence all output")
@@ -151,11 +156,14 @@ struct Config
     }
 };
 
+enum class FrameType {AUDIO, DATA, MIXED, BERT};
+
 using lsf_t = std::array<uint8_t, 30>;
 
 std::atomic<bool> running{false};
 
 bool bitstream = false;
+bool invert = false;
 
 void signal_handler(int)
 {
@@ -219,7 +227,7 @@ std::array<int16_t, 1920> symbols_to_baseband(std::array<int8_t, 192> symbols)
 
     for (auto& b : baseband)
     {
-        b = rrc(b) * 7168.0;
+        b = rrc(b) * 7168.0 * (invert ? -1.0 : 1.0);
     }
 
     return baseband;
@@ -282,10 +290,11 @@ void send_preamble()
 
 constexpr std::array<uint8_t, 2> SYNC_WORD = {0x32, 0x43};
 constexpr std::array<uint8_t, 2> LSF_SYNC_WORD = {0x55, 0xF7};
-constexpr std::array<uint8_t, 2> DATA_SYNC_WORD = {0xFF, 0x5D};
+constexpr std::array<uint8_t, 2> STREAM_SYNC_WORD = {0xFF, 0x5D};
+constexpr std::array<uint8_t, 2> PACKET_SYNC_WORD = {0xFF, 0x5D};
+constexpr std::array<uint8_t, 2> BERT_SYNC_WORD = {0xDF, 0x55};
 
-
-lsf_t send_lsf(const std::string& src, const std::string& dest)
+lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType type = FrameType::AUDIO)
 {
     using namespace mobilinkd;
 
@@ -313,8 +322,13 @@ lsf_t send_lsf(const std::string& src, const std::string& dest)
 
     auto rit = std::copy(encoded_dest.begin(), encoded_dest.end(), result.begin());
     std::copy(encoded_src.begin(), encoded_src.end(), rit);
-    result[12] = 5;
-    result[13] = 5;
+    if (type == FrameType::AUDIO) {
+        result[12] = 5;
+        result[13] = 5;
+    } else if (type == FrameType::BERT) {
+        result[12] = 0;
+        result[13] = 1;
+    }
 
     crc.reset();
     for (size_t i = 0; i != 28; ++i)
@@ -412,6 +426,70 @@ data_frame_t make_data_frame(uint16_t frame_number, const codec_frame_t& payload
     return punctured;
 }
 
+template <typename PRBS>
+bitstream_t make_bert_frame(PRBS& prbs)
+{
+    std::array<uint8_t, 25> data;   // 24.6125 bytes, 197 bits
+
+    // Generate the data.
+    for (size_t i = 0; i != data.size() - 1; ++i) {
+        uint8_t byte = 0;
+        for (int i = 0; i != 8; ++i) {
+            byte <<= 1;
+            byte |= prbs();
+        }
+        data[i] = byte;
+    }
+
+    uint8_t byte = 0;
+    for (int i = 0; i != 5; ++i) {
+        byte <<= 1;
+        byte |= prbs();
+    }
+    byte <<= 3;
+    data[24] = byte;
+
+
+    std::array<uint8_t, 402> encoded;
+    size_t index = 0;
+    uint32_t memory = 0;
+    for (size_t i = 0; i != data.size() - 1; ++i)
+    {
+        auto b = data[i];
+        for (size_t j = 0; j != 8; ++j)
+        {
+            uint32_t x = (b & 0x80) >> 7;
+            b <<= 1;
+            memory = mobilinkd::update_memory<4>(memory, x);
+            encoded[index++] = mobilinkd::convolve_bit(031, memory);
+            encoded[index++] = mobilinkd::convolve_bit(027, memory);
+        }
+    }
+
+    auto b = data[24];
+    for (size_t j = 0; j != 5; ++j)
+    {
+        uint32_t x = (b & 0x80) >> 7;
+        b <<= 1;
+        memory = mobilinkd::update_memory<4>(memory, x);
+        encoded[index++] = mobilinkd::convolve_bit(031, memory);
+        encoded[index++] = mobilinkd::convolve_bit(027, memory);
+    }
+
+    // Flush the encoder.
+    for (size_t i = 0; i != 4; ++i)
+    {
+        memory = mobilinkd::update_memory<4>(memory, 0);
+        encoded[index++] = mobilinkd::convolve_bit(031, memory);
+        encoded[index++] = mobilinkd::convolve_bit(027, memory);
+    }
+
+    bitstream_t punctured;
+    auto size = mobilinkd::puncture(encoded, punctured, mobilinkd::P2);
+    assert(size == 368);
+    return punctured;
+}
+
 /**
  * Encode each LSF segment into a Golay-encoded LICH segment bitstream.
  */
@@ -469,7 +547,7 @@ void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
 
     interleaver.interleave(temp);
     randomizer.randomize(temp);
-    output_frame(DATA_SYNC_WORD, temp);
+    output_frame(STREAM_SYNC_WORD, temp);
 }
 
 void transmit(queue_t& queue, const lsf_t& lsf)
@@ -528,8 +606,10 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
     send_audio_frame(lich[lich_segment], data);
 }
+
 #define USE_OLD_MODULATOR
 #ifdef USE_OLD_MODULATOR
+
 
 int main(int argc, char* argv[])
 {
@@ -539,30 +619,49 @@ int main(int argc, char* argv[])
     if (!config) return 0;
 
     bitstream = config->bitstream;
+    invert = config->invert;
 
     signal(SIGINT, &signal_handler);
 
     send_preamble();
-    auto lsf = send_lsf(config->source_address, config->destination_address);
 
-    running = true;
-    queue_t queue;
-    std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
+    if (!config->bert) {
+        auto lsf = send_lsf(config->source_address, config->destination_address);
 
-    std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
+        running = true;
+        queue_t queue;
+        std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
 
-    // Input must be 8000 SPS, 16-bit LE, 1 channel raw audio.
-    while (running)
-    {
-        int16_t sample;
-        if (!std::cin.read(reinterpret_cast<char*>(&sample), 2)) break;
-        if (!queue.put(sample, std::chrono::seconds(300))) break;
+        std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
+
+        // Input must be 8000 SPS, 16-bit LE, 1 channel raw audio.
+        while (running)
+        {
+            int16_t sample;
+            if (!std::cin.read(reinterpret_cast<char*>(&sample), 2)) break;
+            if (!queue.put(sample, std::chrono::seconds(300))) break;
+        }
+
+        running = false;
+
+        queue.close();
+        thd.join();
+    } else {
+        PRBS9 prbs;
+
+        send_preamble();
+        running = true;
+        M17Randomizer<368> randomizer;
+        PolynomialInterleaver<45, 92, 368> interleaver;
+
+        while (running) {
+            auto frame = make_bert_frame(prbs);
+            interleaver.interleave(frame);
+            randomizer.randomize(frame);
+            output_frame(BERT_SYNC_WORD, frame);    
+        }
     }
 
-    running = false;
-
-    queue.close();
-    thd.join();
 
     return EXIT_SUCCESS;
 }
