@@ -203,3 +203,33 @@ TEST_F(UtilTest, llr_near_minus_two)
         EXPECT_EQ(int(b), -1) << v << ", b = " << int(b);
     }
 }
+
+TEST_F(UtilTest, PRBS9)
+{
+    mobilinkd::PRBS9 prbs;
+    uint16_t lfsr = 0x100;
+
+    for (size_t i = 0; i != 511; ++i) {
+        lfsr = ((__builtin_popcount(lfsr & 0x11) & 1) << 8) | (lfsr >> 1);
+        bool p = (lfsr & 0x100) == 0x100;
+        bool n = prbs();
+        EXPECT_EQ(p,n) << "i = " << i;
+    }
+}
+
+TEST_F(UtilTest, PRBS9_FULL)
+{
+    mobilinkd::PRBS9 prbs_generator;
+    mobilinkd::PRBS9 prbs_validator;
+
+    for (size_t i = 0; i != 1000; ++i) {
+        bool n = prbs_generator();
+        if (i == 499) n = !n;
+        else if (i == 510) n = !n;
+        prbs_validator(n);
+    }
+
+    ASSERT_TRUE(prbs_validator.sync());
+    EXPECT_EQ(prbs_validator.bits(), 1000);
+    EXPECT_EQ(prbs_validator.errors(), 2);
+}

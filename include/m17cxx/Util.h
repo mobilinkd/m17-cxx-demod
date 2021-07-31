@@ -316,4 +316,69 @@ constexpr void to_byte_array(std::array<T, N> in, std::array<uint8_t, (N + 7) / 
     if (i < out.size()) out[i] = tmp;
 }
 
+struct PRBS9
+{
+	static constexpr uint16_t MASK = 0x1FF;
+	static constexpr uint8_t TAP_1 = 8;		    // Bit 9
+	static constexpr uint8_t TAP_2 = 4;		    // Bit 5
+    static constexpr uint8_t LOCK_COUNT = 18;   // 18 consecutive good bits.
+
+    uint16_t state = 1;
+    bool synced = false;
+    uint8_t sync_count = 0;
+    uint32_t bit_count = 0;
+    uint32_t err_count = 0;
+
+    // PRBS generator.
+    bool operator()()
+    {
+        bool result = ((state >> TAP_1) ^ (state >> TAP_2)) & 1;
+        state = ((state << 1) | result) & MASK;
+        return result;
+    }
+
+    // PRBS validator.
+    bool operator()(bool bit)
+    {
+        bool result;
+        if (!synced) {
+            // Need to sync the PRBS with the incoming data.
+            result = (bit ^ (state >> TAP_1) ^ (state >> TAP_2)) & 1;
+            state = ((state << 1) | bit) & MASK;
+            if (result) {
+                sync_count = 0; // error
+            } else {
+                if (++sync_count == LOCK_COUNT) {
+                    synced = true;
+                    err_count = 0;
+                    bit_count = LOCK_COUNT;
+                }
+            }
+        } else {
+            // PRBS is now free-running.
+            result = ((state >> TAP_1) ^ (state >> TAP_2)) & 1;
+            state = ((state << 1) | result) & MASK;
+
+            bit_count += 1;
+            err_count += (result != bit);
+        }
+        return result;
+    }
+
+    bool sync() const { return synced; }
+
+    uint32_t errors() const { assert(synced); return err_count; }
+    uint32_t bits() const { assert(synced); return bit_count; }
+
+    // Reset the state.
+    void reset()
+    {
+        state = 1;
+        synced = false;
+        sync_count = 0;
+        bit_count = 0;
+        err_count = 0;
+    }
+};
+
 } // mobilinkd
