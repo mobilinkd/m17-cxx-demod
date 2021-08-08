@@ -84,6 +84,36 @@ GNU Radio block feeding an Analog Devices
 modulating the m17.bin file from the
 [m17-demodulator](https://github.com/mobilinkd/m17-demodulator) repo.
 
+## Demodulator Diagnostic
+
+The demodulator produces diagnost output which looks like:
+
+    SRC: BROADCAST, DEST: MBLKDTNC3, TYPE: 0002, NONCE: 0000000000000000000000000000, CRC: bb9b
+    dcd: 1, evm:    13.27%, deviation:   0.9857, freq offset:  0.03534, locked:   true, clock:        1, sample: 0, 0, 0, cost: 9
+
+The first line shows the received link information.  The second line contains the following diagnostics.
+
+ - **DCD** -- data carrier detect -- uses a DFT to detect baseband energy.  Very good at detecting whether data may be there.
+ - **EVM** -- error vector magnitude -- measure the Std Dev of the offset from ideal for each symbol.
+ - **Deviation** -- normalized to 1.0 to mean 2400Hz deviation for the input from the following command:
+    `rtl_fm -F 9 -f 144.91M -s 18k | sox -t s16 -r 18k -c1 - -t raw - gain 9 rate -v -s 48k` -- the rates and gain are the important part.
+ - **Frequency Offset** -- the estimated frequency offset from 0 based on the DC level of each symbol.  The magnutude has
+    not been measure but should be around 1.0 == 2kHz using the same normalized input as for deviation.  Anything > 0.1
+    or less than -0.1 requires review/calibration of the TX and RX frequencies.
+ - **Locked** -- sync word detected. 
+ - **Clock** -- estimated difference between TX and RX clock.  Will not work if > 500ppm.
+ - **Sample** -- estimated sample point based on 2 clock recovery methods.  Should agree to within 1 always.  There are
+    10 samples per symbol.  Should never jump by more than 1 per frame.  The third number is the "winner" based on
+    certain heuristics.
+ - **Cost** -- the normalized Viterbi cost estimate for decoding the frame.  < 5 great, < 15 good, < 30 OK, < 50 bad, > 80 you're hosed.
+
+## BER Testing
+
+When transmitting a BER test, the diagnostics line will show additional information.
+
+    dcd: 1, evm:    2.626%, deviation:   0.9318, freq offset:   -0.154, locked:   true, clock:        1, sample: 2, 2, 2, cost: 2, BER: 0.000000 (53190 bits)
+
+The BER rate and number of bits received are also displayed.
 
 ## Thanks
 
