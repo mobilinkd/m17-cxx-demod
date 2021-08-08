@@ -86,6 +86,13 @@ modulating the m17.bin file from the
 
 ## Demodulator Diagnostic
 
+The demodulator diagnostics are calibrated for the following command:
+
+    rtl_fm -F 9 -f 144.91M -s 18k | sox -t s16 -r 18k -c1 - -t raw - gain 9 rate -v -s 48k | ./apps/m17-demod -d -l | play -b 16 -r 8000 -c1 -t s16 -
+
+Specifically, the initial rate (18k samples per second) and the conversion rate and gain (gain of 9,
+output rate 48k samples per second) are important for deviation and frequency offset.
+
 The demodulator produces diagnost output which looks like:
 
     SRC: BROADCAST, DEST: MBLKDTNC3, TYPE: 0002, NONCE: 0000000000000000000000000000, CRC: bb9b
@@ -101,7 +108,7 @@ The first line shows the received link information.  The second line contains th
     not been measure but should be around 1.0 == 2kHz using the same normalized input as for deviation.  Anything > 0.1
     or less than -0.1 requires review/calibration of the TX and RX frequencies.
  - **Locked** -- sync word detected. 
- - **Clock** -- estimated difference between TX and RX clock.  Will not work if > 500ppm.
+ - **Clock** -- estimated difference between TX and RX clock.  Will not work if > 500ppm.  Normalized to 1.0 -- meaning the clocks are equal.
  - **Sample** -- estimated sample point based on 2 clock recovery methods.  Should agree to within 1 always.  There are
     10 samples per symbol.  Should never jump by more than 1 per frame.  The third number is the "winner" based on
     certain heuristics.
