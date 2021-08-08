@@ -286,9 +286,9 @@ void M17Demodulator<FloatType>::do_unlocked()
 		sync_count = 0;
 		missing_sync_count = 0;
 		need_clock_reset_ = true;
+		dev.reset();
 		update_values(sync_index);
 		sample_index = sync_index;
-		dev.reset();
 		demodState = DemodState::FRAME;
 		if (sync_updated < 0)
 		{
@@ -307,9 +307,9 @@ void M17Demodulator<FloatType>::do_unlocked()
 		sync_count = 0;
 		missing_sync_count = 0;
 		need_clock_reset_ = true;
+		dev.reset();
 		update_values(sync_index);
 		sample_index = sync_index;
-		dev.reset();
 		demodState = DemodState::FRAME;
 		if (sync_updated < 0)
 		{
