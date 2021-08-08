@@ -344,7 +344,7 @@ struct Config
         desc.add_options()
             ("help,h", "Print this help message and exit.")
             ("version,V", "Print the application verion and exit.")
-            ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (ignored for bitstream)")
+            ("invert,i", po::bool_switch(&result.invert), "invert the input baseband")
             ("lsf,l", po::bool_switch(&result.lsf), "display the decoded LSF")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
