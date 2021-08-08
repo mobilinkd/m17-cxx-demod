@@ -217,17 +217,31 @@ TEST_F(UtilTest, PRBS9)
     }
 }
 
+#include <iomanip>
+
 TEST_F(UtilTest, PRBS9_FULL)
 {
     mobilinkd::PRBS9 prbs_generator;
     mobilinkd::PRBS9 prbs_validator;
 
+    uint16_t byte = 0;
+    uint16_t bits = 0;
     for (size_t i = 0; i != 1000; ++i) {
         bool n = prbs_generator();
+        byte <<= 1;
+        byte |= n;
+        if (++bits == 8) {
+            std::cout << std::hex << std::setw(2) << byte << " ";
+            byte = 0;
+            bits = 0;
+        }
+
         if (i == 499) n = !n;
         else if (i == 510) n = !n;
         prbs_validator(n);
     }
+
+    std::cout << std::endl;
 
     ASSERT_TRUE(prbs_validator.sync());
     EXPECT_EQ(prbs_validator.bits(), 1000);
