@@ -244,7 +244,7 @@ bool decode_bert(mobilinkd::M17FrameDecoder::bert_buffer_t const& bert)
     for (int j = 0; j != 24; ++j) {
         auto b = bert[j];
         for (int i = 0; i != 8; ++i) {
-            prbs(b & 0x80);
+            prbs.validate(b & 0x80);
             b <<= 1;
         }
     }
@@ -252,7 +252,7 @@ bool decode_bert(mobilinkd::M17FrameDecoder::bert_buffer_t const& bert)
     auto b = bert[24];
     for (int i = 0; i != 5; ++i)
     {
-        prbs(b & 0x80);
+        prbs.validate(b & 0x80);
         b <<= 1;
     }
 

@@ -322,6 +322,7 @@ struct PRBS9
 	static constexpr uint8_t TAP_1 = 8;		    // Bit 9
 	static constexpr uint8_t TAP_2 = 4;		    // Bit 5
     static constexpr uint8_t LOCK_COUNT = 18;   // 18 consecutive good bits.
+    static constexpr uint8_t UNLOCK_COUNT = 25; // 18 consecutive good bits.
 
     uint16_t state = 1;
     bool synced = false;
@@ -332,69 +333,67 @@ struct PRBS9
     size_t hist_count = 0;
     size_t hist_pos = 0;
 
+    void count_errors(bool error)
+    {
+        bit_count += 1;
+        hist_count -= (history[hist_pos >> 3] & (1 << (hist_pos & 7))) != 0;
+        if (error) {
+            err_count += 1;
+            hist_count += 1;
+            history[hist_pos >> 3] |= (1 << (hist_pos & 7));
+            if (hist_count >= UNLOCK_COUNT) synced = false;
+        } else {
+            history[hist_pos >> 3] &= ~(1 << (hist_pos & 7));
+        }
+        if (++hist_pos == 128) hist_pos = 0;
+    }
+
     // PRBS generator.
-    bool operator()()
+    bool generate()
     {
         bool result = ((state >> TAP_1) ^ (state >> TAP_2)) & 1;
         state = ((state << 1) | result) & MASK;
         return result;
     }
 
-    // PRBS validator.
-    bool operator()(bool bit)
+    // PRBS Syncronizer. Returns 0 if the bit matches the PRBS, otherwise 1.
+    // When synchronizing the LFSR used in the PRBS, a single bad input bit will
+    // result in 3 error bits being emitted.
+    bool synchronize(bool bit)
+    {
+        bool result = (bit ^ (state >> TAP_1) ^ (state >> TAP_2)) & 1;
+        state = ((state << 1) | bit) & MASK;
+        if (result) {
+            sync_count = 0; // error
+        } else {
+            if (++sync_count == LOCK_COUNT) {
+                synced = true;
+                bit_count += LOCK_COUNT;
+                history.fill(0);
+                hist_count = 0;
+                hist_pos = 0;
+                sync_count = 0;
+            }
+        }
+        return result;
+    }
+
+    // PRBS validator.  Returns 0 if the bit matches the PRBS, otherwise 1.
+    // The results are only valid when sync() returns true;
+    bool validate(bool bit)
     {
         bool result;
         if (!synced) {
-            // Need to sync the PRBS with the incoming data.
-            result = (bit ^ (state >> TAP_1) ^ (state >> TAP_2)) & 1;
-            state = ((state << 1) | bit) & MASK;
-            if (result) {
-                sync_count = 0; // error
-            } else {
-                if (++sync_count == LOCK_COUNT) {
-                    synced = true;
-                    err_count = 0;
-                    bit_count = LOCK_COUNT;
-                    history.fill(0);
-                    hist_count = 0;
-                    hist_pos = 0;
-                    sync_count = 0;
-                }
-            }
-        } else if (hist_count > 25) {
-            result = (bit ^ (state >> TAP_1) ^ (state >> TAP_2)) & 1;
-            state = ((state << 1) | bit) & MASK;
-            if (result) {
-                sync_count = 0;
-            } else {
-                if (++sync_count == LOCK_COUNT) {
-                    history.fill(0);
-                    hist_count = 0;
-                    hist_pos = 0;
-                    sync_count = 0;
-                }
-            }
+            result = synchronize(bit);
         } else {
             // PRBS is now free-running.
-            result = ((state >> TAP_1) ^ (state >> TAP_2)) & 1;
-            state = ((state << 1) | result) & MASK;
-
-            bit_count += 1;
-            hist_count -= (history[hist_pos >> 3] & (1 << (hist_pos & 7))) != 0;
-            if (result != bit) {
-                err_count += 1;
-                hist_count += 1;
-                history[hist_pos >> 3] |= (1 << (hist_pos & 7));
-            } else {
-                history[hist_pos >> 3] &= ~(1 << (hist_pos & 7));
-            }
-            if (++hist_pos == 128) hist_pos = 0;
+            result = bit != generate();
+            count_errors(result);
         }
         return result;
     }
 
     bool sync() const { return synced; }
-
     uint32_t errors() const { assert(synced); return err_count; }
     uint32_t bits() const { assert(synced); return bit_count; }
 

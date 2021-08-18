@@ -212,7 +212,7 @@ TEST_F(UtilTest, PRBS9)
     for (size_t i = 0; i != 511; ++i) {
         lfsr = ((__builtin_popcount(lfsr & 0x11) & 1) << 8) | (lfsr >> 1);
         bool p = (lfsr & 0x100) == 0x100;
-        bool n = prbs();
+        bool n = prbs.generate();
         EXPECT_EQ(p,n) << "i = " << i;
     }
 }
@@ -227,7 +227,7 @@ TEST_F(UtilTest, PRBS9_FULL)
     uint16_t byte = 0;
     uint16_t bits = 0;
     for (size_t i = 0; i != 1000; ++i) {
-        bool n = prbs_generator();
+        bool n = prbs_generator.generate();
         byte <<= 1;
         byte |= n;
         if (++bits == 8) {
@@ -238,7 +238,7 @@ TEST_F(UtilTest, PRBS9_FULL)
 
         if (i == 499) n = !n;
         else if (i == 510) n = !n;
-        prbs_validator(n);
+        prbs_validator.validate(n);
     }
 
     std::cout << std::endl;

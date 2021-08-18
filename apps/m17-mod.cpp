@@ -436,7 +436,7 @@ bitstream_t make_bert_frame(PRBS& prbs)
         uint8_t byte = 0;
         for (int i = 0; i != 8; ++i) {
             byte <<= 1;
-            byte |= prbs();
+            byte |= prbs.generate();
         }
         data[i] = byte;
     }
@@ -444,7 +444,7 @@ bitstream_t make_bert_frame(PRBS& prbs)
     uint8_t byte = 0;
     for (int i = 0; i != 5; ++i) {
         byte <<= 1;
-        byte |= prbs();
+        byte |= prbs.generate();
     }
     byte <<= 3;
     data[24] = byte;
