@@ -20,6 +20,23 @@ extern bool display_lsf;
 
 namespace mobilinkd
 {
+
+
+template <typename C, size_t N>
+void dump(const std::array<C,N>& data, char header = 'D')
+{
+    putchar(header);
+    putchar('=');
+    for (auto c : data)
+    {
+        const char hex[] = "0123456789ABCDEF";
+        putchar(hex[uint8_t(c)>>4]);
+        putchar(hex[uint8_t(c)&0xf]);
+    }
+    putchar('\r');
+    putchar('\n');
+}
+
 struct M17FrameDecoder
 {
     M17Randomizer<368> derandomize_;
@@ -134,6 +151,9 @@ struct M17FrameDecoder
         viterbi_cost = viterbi_.decode(depuncture_buffer.lsf, decode_buffer.lsf);
         to_byte_array(decode_buffer.lsf, output_buffer.lsf);
         
+        // dump(output_buffer.lsf);
+        // printf("cost = %lu\n", viterbi_cost);
+
         crc_.reset();
         for (auto c : output_buffer.lsf) crc_(c);
         auto checksum = crc_.get();
@@ -334,7 +354,7 @@ struct M17FrameDecoder
             switch (state_)
             {
             case State::LSF:
-                decode_lich(buffer, viterbi_cost);
+                return decode_lich(buffer, viterbi_cost);
             case State::STREAM:
                 return decode_stream(buffer, viterbi_cost);
             default:
