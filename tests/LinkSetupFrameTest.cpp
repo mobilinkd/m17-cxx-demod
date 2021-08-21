@@ -39,3 +39,16 @@ TEST_F(LinkSetupFrameTest, decode_callsign)
     EXPECT_EQ(callsign[4], 0);
 }
 
+TEST_F(LinkSetupFrameTest, decode_callsign_2)
+{
+    mobilinkd::LinkSetupFrame::encoded_call_t encoded = {0x00, 0x00, 0x5F, 0x1B, 0x66, 0x91};
+    auto callsign = mobilinkd::LinkSetupFrame::decode_callsign(encoded);
+    EXPECT_EQ(callsign[0], 'I') << (char*) callsign.data();
+    EXPECT_EQ(callsign[1], 'U');
+    EXPECT_EQ(callsign[2], '2');
+    EXPECT_EQ(callsign[3], 'K');
+    EXPECT_EQ(callsign[4], 'W');
+    EXPECT_EQ(callsign[5], 'O');
+    EXPECT_EQ(callsign[6], 0);
+}
+
