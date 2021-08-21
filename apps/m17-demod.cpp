@@ -96,7 +96,7 @@ bool dump_lsf(std::array<T, N> const& lsf)
         for (auto x : dest) if (x) std::cerr << x;
 
         uint16_t type = (lsf[12] << 8) | lsf[13];
-        std::cerr << ", TYPE: " << std::setw(4) << std::setfill('0') << type;
+        std::cerr << ", TYPE: " << std::hex << std::setw(4) << std::setfill('0') << type;
 
         std::cerr << ", NONCE: ";
         for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
