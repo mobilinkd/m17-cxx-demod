@@ -322,7 +322,7 @@ struct PRBS9
 	static constexpr uint8_t TAP_1 = 8;		    // Bit 9
 	static constexpr uint8_t TAP_2 = 4;		    // Bit 5
     static constexpr uint8_t LOCK_COUNT = 18;   // 18 consecutive good bits.
-    static constexpr uint8_t UNLOCK_COUNT = 25; // 18 consecutive good bits.
+    static constexpr uint8_t UNLOCK_COUNT = 25; // bad bits in history required to unlock.
 
     uint16_t state = 1;
     bool synced = false;
@@ -387,7 +387,7 @@ struct PRBS9
             result = synchronize(bit);
         } else {
             // PRBS is now free-running.
-            result = bit != generate();
+            result = bit ^ generate();
             count_errors(result);
         }
         return result;
