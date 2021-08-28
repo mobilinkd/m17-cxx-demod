@@ -25,6 +25,7 @@ bool display_lsf = false;
 bool invert_input = false;
 bool quiet = false;
 bool debug = false;
+bool noise_blanker = false;
 
 struct CODEC2 *codec2;
 
@@ -142,17 +143,17 @@ bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, i
         result = false;
     }
 
-    if (viterbi_cost < 70)
+    if (noise_blanker && viterbi_cost > 80)
     {
-        codec2_decode(codec2, buf.begin(), audio.begin() + 2);
+        buf.fill(0);
         std::cout.write((const char*)buf.begin(), 320);
-        codec2_decode(codec2, buf.begin(), audio.begin() + 10);
         std::cout.write((const char*)buf.begin(), 320);
     }
     else
     {
-        buf.fill(0);
+        codec2_decode(codec2, buf.begin(), audio.begin() + 2);
         std::cout.write((const char*)buf.begin(), 320);
+        codec2_decode(codec2, buf.begin(), audio.begin() + 10);
         std::cout.write((const char*)buf.begin(), 320);
     }
 
@@ -331,6 +332,7 @@ struct Config
     bool quiet = false;
     bool invert = false;
     bool lsf = false;
+    bool noise_blanker = false;
 
     static std::optional<Config> parse(int argc, char* argv[])
     {
@@ -344,7 +346,8 @@ struct Config
         desc.add_options()
             ("help,h", "Print this help message and exit.")
             ("version,V", "Print the application verion and exit.")
-            ("invert,i", po::bool_switch(&result.invert), "invert the input baseband")
+            ("invert,i", po::bool_switch(&result.invert), "invert the received baseband")
+            ("noise-blanker,b", po::bool_switch(&result.noise_blanker), "noise blanker -- silence likely corrupt audio")
             ("lsf,l", po::bool_switch(&result.lsf), "display the decoded LSF")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
@@ -399,6 +402,7 @@ int main(int argc, char* argv[])
     invert_input = config->invert;
     quiet = config->quiet;
     debug = config->debug;
+    noise_blanker = config->noise_blanker;
 
     codec2 = ::codec2_create(CODEC2_MODE_3200);
 
