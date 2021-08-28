@@ -133,7 +133,11 @@ struct M17FrameDecoder
         }
     }
 
-    void reset() { state_ = State::LSF; }
+    void reset()
+    {
+        state_ = State::LSF;
+        frame_number = 0;
+    }
 
     /**
      * Decode the LSF and, if it is valid, transition to the next state.
@@ -268,6 +272,7 @@ struct M17FrameDecoder
 
         if ((viterbi_cost < 60) && (output_buffer.stream[0] & 0x80))
         {
+            // fputs("\nEOS\n", stderr);
             state_ = State::LSF;
         }
 
