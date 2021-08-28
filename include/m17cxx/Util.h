@@ -189,9 +189,9 @@ size_t depuncture(const std::array<int8_t, IN>& in,
 }
 
 
-template <size_t IN, size_t OUT, size_t P>
-size_t puncture(const std::array<uint8_t, IN>& in,
-    std::array<int8_t, OUT>& out, const std::array<int8_t, P>& p)
+template <typename T, size_t IN, typename U, size_t OUT, size_t P>
+size_t puncture(const std::array<T, IN>& in,
+    std::array<U, OUT>& out, const std::array<int8_t, P>& p)
 {
     size_t index = 0;
     size_t pindex = 0;
