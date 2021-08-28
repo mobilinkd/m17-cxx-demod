@@ -62,6 +62,14 @@ This bitstream file can be fed into [m17-gnuradio](https://github.com/mobilinkd/
 transmit M17 using a PlutoSDR (or any SDR with an appropriate GNU Radio sink), or loaded into
 a vector signal generator such as an ESG-D Series signal generator.
 
+I have recently been testing the modulator and demodulator with long-form programs. One
+that works well is the [AR Newsline](https://www.arnewsline.org/) program.  This is available
+as a downloadable MP3 file.  To convert that to a bitstream, run the following:
+
+    ffmpeg -i ~/Downloads/Report2287.mp3 -ar 8000 -ac 1 -f s16le -acodec pcm_s16le - | ./apps/m17-mod -b -S NS9RC > Report2287.bin
+
+This can then be used with the the `M17_Impaired.grc` GNU Radio flow graph.
+
 ### Command Line Options
 
 There are two command line options for the demodulator that determine the diagnostic output.
