@@ -130,7 +130,7 @@ struct M17Demodulator
 	static constexpr FloatType sample_rate = SAMPLE_RATE;
 	static constexpr FloatType symbol_rate = SYMBOL_RATE;
 
-	static constexpr uint8_t MAX_MISSING_SYNC = 5;
+	static constexpr uint8_t MAX_MISSING_SYNC = 8;
 
 	using collelator_t = Correlator<FloatType>;
 	using sync_word_t = SyncWord<collelator_t>;
@@ -249,11 +249,13 @@ void M17Demodulator<FloatType>::update_dcd()
 {
 	if (!dcd_ && dcd.dcd())
 	{
+		// fputs("\nAOS\n", stderr);
 		dcd_on();
 		need_clock_reset_ = true;
 	}
 	else if (dcd_ && !dcd.dcd())
 	{
+		// fputs("\nLOS\n", stderr);
 		dcd_off();
 	}
 }
@@ -400,7 +402,6 @@ void M17Demodulator<FloatType>::do_stream_sync()
 	}
 	else if (sync_count > 87)
 	{
-		dev.update();
 		missing_sync_count += 1;
 		if (missing_sync_count < MAX_MISSING_SYNC)
 		{
@@ -409,6 +410,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 		}
 		else
 		{
+			// fputs("\n!SYNC\n", stderr);
 			demodState = DemodState::LSF_SYNC;
 		}
 	}
@@ -483,6 +485,8 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 {
 	if (correlator.index() != sample_index) return;
 
+	static uint8_t cost_count = 0;
+
 	auto sample = filtered_sample - dev.offset();
 	sample *= dev.idev();
 	sample *= polarity;
@@ -497,6 +501,18 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 		M17FrameDecoder::input_buffer_t buffer;
 		std::copy(tmp, tmp + len, buffer.begin());
 		auto valid = decoder(sync_word_type, buffer, viterbi_cost);
+
+		cost_count = viterbi_cost > 90 ? cost_count + 1 : 0;
+		cost_count = viterbi_cost > 100 ? cost_count + 1 : cost_count;
+		cost_count = viterbi_cost > 110 ? cost_count + 1 : cost_count;
+
+		if (cost_count > 75)
+		{
+			cost_count = 0;
+			demodState = DemodState::UNLOCKED;
+			// fputs("\nCOST\n", stderr);
+			return;
+		}
 
 		switch (decoder.state())
 		{
@@ -578,7 +594,7 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 			clock_recovery.reset();
 			need_clock_reset_ = false;
 		}
-		if (need_clock_update_)
+		else if (need_clock_update_) // must avoid update immediately after reset.
 		{
 			clock_recovery.update();
 			uint8_t clock_index = clock_recovery.sample_index();
