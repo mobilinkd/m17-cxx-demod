@@ -77,6 +77,50 @@ void append_packet(std::vector<uint8_t>& result, std::array<T, N> in)
     }
 }
 
+void dump_type(uint16_t type)
+{
+    std::cerr << ", ";
+    if (type & 1) {
+        std::cerr << "STR:";
+        switch ((type & 6) >> 1)
+        {
+            case 0:
+                std::cerr << "UNK";
+                break;
+            case 1:
+                std::cerr << "D/D";
+                break;
+            case 2:
+                std::cerr << "V/V";
+                break;
+            case 3:
+                std::cerr << "V/D";
+                break;
+        }
+    }
+    else
+    {
+        std::cerr << "PKT:";
+        switch ((type & 6) >> 1)
+        {
+            case 0:
+                std::cerr << "UNK";
+                break;
+            case 1:
+                std::cerr << "RAW";
+                break;
+            case 2:
+                std::cerr << "ENC";
+                break;
+            case 3:
+                std::cerr << "UNK";
+                break;
+        }
+    }
+
+    std::cerr << " CAN:" << std::dec << std::setw(2) << std::setfill('0') << int((type & 0x780) >> 7);
+}
+
 template <typename T, size_t N>
 bool dump_lsf(std::array<T, N> const& lsf)
 {
@@ -97,13 +141,13 @@ bool dump_lsf(std::array<T, N> const& lsf)
         for (auto x : dest) if (x) std::cerr << x;
 
         uint16_t type = (lsf[12] << 8) | lsf[13];
-        std::cerr << ", TYPE: " << std::hex << std::setw(4) << std::setfill('0') << type;
+        dump_type(type);
 
         std::cerr << ", NONCE: ";
         for (size_t i = 14; i != 28; ++i) std::cerr << std::hex << std::setw(2) << std::setfill('0') << int(lsf[i]);
 
         uint16_t crc = (lsf[28] << 8) | lsf[29];
-        std::cerr << ", CRC: " << std::setw(4) << std::setfill('0') << crc;
+        std::cerr << ", CRC: " << std::hex << std::setw(4) << std::setfill('0') << crc;
         std::cerr << std::dec << std::endl;
     }
 
