@@ -75,6 +75,7 @@ struct Config
     bool bitstream = false; // default is baseband audio
     bool bert = false; // Bit error rate testing.
     bool invert = false;
+    int can = 10;
 
     static std::optional<Config> parse(int argc, char* argv[])
     {
@@ -92,6 +93,8 @@ struct Config
                 "transmitter identifier (your callsign).")
             ("dest,D", po::value<std::string>(&result.destination_address),
                 "destination (default is broadcast).")
+            ("can,C", po::value<int>(&result.can)->default_value(10),
+                "channel access number.")
             ("audio,a", po::value<std::string>(&result.audio_device),
                 "audio device (default is STDIN).")
             ("event,e", po::value<std::string>(&result.event_device)->default_value("/dev/input/by-id/usb-C-Media_Electronics_Inc._USB_Audio_Device-event-if03"),
@@ -152,6 +155,11 @@ struct Config
             return std::nullopt;
         }
 
+        if (result.can < 0 || result.can > 15) {
+            std::cerr << "invalid channel access number (CAN) " << result.can << ". Must be 0-15." << std::endl;
+            return std::nullopt;
+        }
+
         return result;
     }
 };
@@ -164,6 +172,7 @@ std::atomic<bool> running{false};
 
 bool bitstream = false;
 bool invert = false;
+int8_t can = 10;
 
 void signal_handler(int)
 {
@@ -323,8 +332,8 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     auto rit = std::copy(encoded_dest.begin(), encoded_dest.end(), result.begin());
     std::copy(encoded_src.begin(), encoded_src.end(), rit);
     if (type == FrameType::AUDIO) {
-        result[12] = 5;
-        result[13] = 5;
+        result[12] = can >> 1;
+        result[13] = 5 | ((can & 1) << 7);
     } else if (type == FrameType::BERT) {
         result[12] = 0;
         result[13] = 1;
@@ -620,6 +629,7 @@ int main(int argc, char* argv[])
 
     bitstream = config->bitstream;
     invert = config->invert;
+    can = config->can;
 
     signal(SIGINT, &signal_handler);
 
