@@ -313,10 +313,7 @@ void M17Demodulator<FloatType>::do_unlocked()
 		update_values(sync_index);
 		sample_index = sync_index;
 		demodState = DemodState::FRAME;
-		if (sync_updated < 0)
-		{
-			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
-		}
+		sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 	}
 }
 
@@ -334,9 +331,8 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 	if (correlator.index() == sample_index)
 	{
 		sync_triggered = preamble_sync.triggered(correlator);
-		if (sync_triggered != 0)
+		if (sync_triggered > 0.1)
 		{
-			update_values(sample_index);
 			return;
 		}
 		sync_triggered = lsf_sync.triggered(correlator);
@@ -349,7 +345,7 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 			demodState = DemodState::FRAME;
 			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 		}
-		else if (sync_triggered != 0)
+		else if (std::abs(sync_triggered) > 0.1)
 		{
 			missing_sync_count = 0;
 			need_clock_update_ = true;
@@ -402,6 +398,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 	}
 	else if (sync_count > 87)
 	{
+		update_values(sync_index);
 		missing_sync_count += 1;
 		if (missing_sync_count < MAX_MISSING_SYNC)
 		{
