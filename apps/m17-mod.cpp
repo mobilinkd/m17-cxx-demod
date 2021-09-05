@@ -311,11 +311,11 @@ void output_eot()
     if (bitstream)
     {
         for (auto c : EOT_SYNC) std::cout << c;
-        for (size_t i = 0; i !=46; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
+        for (size_t i = 0; i !=10; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
     }
     else
     {
-        std::array<int8_t, 192> out_symbols; // EOT symbols + FIR flush.
+        std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
         out_symbols.fill(0);
         auto symbols = bytes_to_symbols(EOT_SYNC);
         for (size_t i = 0; i != symbols.size(); ++i)
