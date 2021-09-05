@@ -221,13 +221,14 @@ std::array<int8_t, N * 4> bytes_to_symbols(const std::array<T, N>& bytes)
     return result;
 }
 
-std::array<int16_t, 1920> symbols_to_baseband(std::array<int8_t, 192> symbols)
+template <size_t N>
+std::array<int16_t, N*10> symbols_to_baseband(std::array<int8_t, N> symbols)
 {
     using namespace mobilinkd;
 
     static BaseFirFilter<double, std::tuple_size<decltype(rrc_taps)>::value> rrc = makeFirFilter(rrc_taps);
 
-    std::array<int16_t, 1920> baseband;
+    std::array<int16_t, N*10> baseband;
     baseband.fill(0);
     for (size_t i = 0; i != symbols.size(); ++i)
     {
@@ -273,6 +274,7 @@ void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 }
 
 
+
 void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
     if (bitstream) output_bitstream(sync_word, frame);
@@ -302,6 +304,27 @@ constexpr std::array<uint8_t, 2> LSF_SYNC_WORD = {0x55, 0xF7};
 constexpr std::array<uint8_t, 2> STREAM_SYNC_WORD = {0xFF, 0x5D};
 constexpr std::array<uint8_t, 2> PACKET_SYNC_WORD = {0xFF, 0x5D};
 constexpr std::array<uint8_t, 2> BERT_SYNC_WORD = {0xDF, 0x55};
+constexpr std::array<uint8_t, 2> EOT_SYNC = { 0x55, 0x5D };
+
+void output_eot()
+{
+    if (bitstream)
+    {
+        for (auto c : EOT_SYNC) std::cout << c;
+    }
+    else
+    {
+        std::array<int8_t, 25> out_symbols; // EOT symbols + FIR flush.
+        out_symbols.fill(0);
+        auto symbols = bytes_to_symbols(EOT_SYNC);
+        for (size_t i = 0; i != symbols.size(); ++i)
+        {
+            out_symbols[i] = symbols[i];
+        }
+        auto baseband = symbols_to_baseband(out_symbols);
+        for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+    }
+}
 
 lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType type = FrameType::AUDIO)
 {
@@ -588,7 +611,7 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     while (!queue.is_closed())
     {
         int16_t sample;
-        if (!queue.get(sample, std::chrono::milliseconds(40))) break;
+        if (!queue.get(sample, std::chrono::milliseconds(3000))) break;
         audio[index++] = sample;
         if (index == audio.size())
         {
@@ -614,6 +637,7 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     audio.fill(0);
     auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
     send_audio_frame(lich[lich_segment], data);
+    output_eot();
 }
 
 #define USE_OLD_MODULATOR
