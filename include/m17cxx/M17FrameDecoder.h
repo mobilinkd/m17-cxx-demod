@@ -39,6 +39,8 @@ void dump(const std::array<C,N>& data, char header = 'D')
 
 struct M17FrameDecoder
 {
+    static constexpr size_t MAX_LICH_FRAGMENT = 5;
+
     M17Randomizer<368> derandomize_;
     PolynomialInterleaver<45, 92, 368> interleaver_;
     Trellis<4,2> trellis_{makeTrellis<4, 2>({031,027})};
@@ -221,12 +223,22 @@ struct M17FrameDecoder
         uint8_t fragment_number = output_buffer.lich[5];   // Get fragment number.
         fragment_number = (fragment_number >> 5) & 7;
 
+        if (fragment_number > MAX_LICH_FRAGMENT)
+        {
+            viterbi_cost = -1;
+            return DecodeResult::INCOMPLETE;    // More to go...
+        }
+
         // Copy decoded LICH to superframe buffer.
         std::copy(output_buffer.lich.begin(), output_buffer.lich.begin() + 5,
             output_buffer.lsf.begin() + (fragment_number * 5));
 
         lich_segments |= (1 << fragment_number);        // Indicate segment received.
-        if (lich_segments != 0x3F) return DecodeResult::INCOMPLETE;        // More to go...
+        if ((lich_segments & 0x3F) != 0x3F)
+        {
+            viterbi_cost = -1;
+            return DecodeResult::INCOMPLETE;        // More to go...
+        }
 
         crc_.reset();
         for (auto c : output_buffer.lsf) crc_(c);
