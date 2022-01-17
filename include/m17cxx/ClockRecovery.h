@@ -1,6 +1,8 @@
-// Copyright 2021 Mobilinkd LLC.
+// Copyright 2022 Mobilinkd LLC.
 
 #pragma once
+
+#include "KalmanFilter.h"
 
 #include <array>
 #include <cstddef>
@@ -238,5 +240,70 @@ public:
         return true;
     }
 };
+
+template <typename FloatType, size_t SamplesPerSymbol>
+struct ClockRecovery2
+{
+    m17::KalmanFilter<FloatType, SamplesPerSymbol> kf_;
+    size_t count_ = 0;
+    int8_t sample_index_ = 0;
+    FloatType clock_estimate_ = 0.;
+
+    void reset(FloatType z)
+    {
+        kf_.reset(z);
+        count_ = 0;
+        sample_index_ = z;
+        clock_estimate_ = 0.;
+    }
+
+    void operator()(FloatType)
+    {
+        ++count_;
+    }
+
+    bool update(uint8_t sw)
+    {
+        if (count_ < 480)
+        {
+            sample_index_ = sw;
+            return false;
+        }
+
+        auto f = kf_.update(sw, count_);
+
+        // Constrain sample index to [0..SamplesPerSymbol), wrapping if needed.
+        sample_index_ = int8_t(round(f[0]));
+        sample_index_ = sample_index_ < 0 ? sample_index_ + SamplesPerSymbol : sample_index_;
+        sample_index_ = sample_index_ >= int8_t(SamplesPerSymbol) ? sample_index_ - SamplesPerSymbol : sample_index_;
+        clock_estimate_ = f[1];
+        count_ = 0;
+
+        return true;
+    }
+
+    /**
+     * Return the estimated sample clock increment based on the last update.
+     *
+     * The value is only valid after samples have been collected and update()
+     * has been called.
+     */
+    FloatType clock_estimate() const
+    {
+        return clock_estimate_;
+    }
+
+    /**
+     * Return the estimated "best sample index" based on the last update.
+     *
+     * The value is only valid after samples have been collected and update()
+     * has been called.
+     */
+    uint8_t sample_index() const
+    {
+        return sample_index_;
+    }
+};
+
 
 } // mobilinkd

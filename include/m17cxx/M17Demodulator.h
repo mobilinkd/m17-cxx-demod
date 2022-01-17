@@ -141,7 +141,7 @@ struct M17Demodulator
 
 	BaseFirFilter<FloatType, detail::Taps<FloatType>::rrc_taps.size()> demod_filter{detail::Taps<FloatType>::rrc_taps};
 	DataCarrierDetect<FloatType, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 4.0};
-	ClockRecovery<FloatType, SAMPLE_RATE, SYMBOL_RATE> clock_recovery;
+	ClockRecovery2<FloatType, SAMPLES_PER_SYMBOL> clock_recovery;
 
 	collelator_t correlator;
 	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};
@@ -588,20 +588,13 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 	{
 		if (need_clock_reset_)
 		{
-			clock_recovery.reset();
+			clock_recovery.reset(sync_sample_index);
 			need_clock_reset_ = false;
 		}
 		else if (need_clock_update_) // must avoid update immediately after reset.
 		{
-			clock_recovery.update();
-			uint8_t clock_index = clock_recovery.sample_index();
-			uint8_t clock_diff = std::abs(sample_index - clock_index);
-			uint8_t sync_diff = std::abs(sample_index - sync_sample_index);
-			bool clock_diff_ok = clock_diff <= 1 || clock_diff == 9;
-			bool sync_diff_ok = sync_diff <= 1 || sync_diff == 9;
-			if (clock_diff_ok) sample_index = clock_index;
-			else if (sync_diff_ok) sample_index = sync_sample_index;
-			// else unchanged.
+			clock_recovery.update(sync_sample_index);
+			sample_index = clock_recovery.sample_index();
 			need_clock_update_ = false;
 		}
 	}
