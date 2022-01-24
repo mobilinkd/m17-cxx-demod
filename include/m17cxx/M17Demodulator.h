@@ -130,7 +130,11 @@ struct M17Demodulator
 	static constexpr FloatType sample_rate = SAMPLE_RATE;
 	static constexpr FloatType symbol_rate = SYMBOL_RATE;
 
-	static constexpr uint8_t MAX_MISSING_SYNC = 8;
+	static constexpr size_t STREAM_COST_LIMIT = 80;
+	static constexpr size_t PACKET_COST_LIMIT = 60;
+	static constexpr uint8_t MAX_MISSING_SYNC = 10;
+	static constexpr uint8_t MIN_SYNC_COUNT = 79;
+	static constexpr uint8_t MAX_SYNC_COUNT = 88;
 
 	using collelator_t = Correlator<FloatType>;
 	using sync_word_t = SyncWord<collelator_t>;
@@ -140,8 +144,8 @@ struct M17Demodulator
 	enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, BERT_SYNC, FRAME };
 
 	BaseFirFilter<FloatType, detail::Taps<FloatType>::rrc_taps.size()> demod_filter{detail::Taps<FloatType>::rrc_taps};
-	DataCarrierDetect<FloatType, SAMPLE_RATE, 500> dcd{2500, 4000, 1.0, 4.0};
-	ClockRecovery2<FloatType, SAMPLES_PER_SYMBOL> clock_recovery;
+	DataCarrierDetect<FloatType, SAMPLE_RATE, 400> dcd{2400, 3600, 0.1, 4.0};
+	ClockRecovery<FloatType, SAMPLES_PER_SYMBOL> clock_recovery;
 
 	collelator_t correlator;
 	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};
@@ -221,12 +225,15 @@ void M17Demodulator<FloatType>::dcd_on()
 {
 	// Data carrier newly detected.
 	dcd_ = true;
-	sync_count = 0;
-	missing_sync_count = 0;
+	if (demodState == DemodState::UNLOCKED)
+	{
+		sync_count = 0;
+		missing_sync_count = 0;
 
-	dev.reset();
-	framer.reset();
-	decoder.reset();
+		dev.reset();
+		framer.reset();
+		decoder.reset();
+	}
 }
 
 template <typename FloatType>
@@ -234,7 +241,6 @@ void M17Demodulator<FloatType>::dcd_off()
 {
 	// Just lost data carrier.
 	dcd_ = false;
-	demodState = DemodState::UNLOCKED;
 }
 
 template <typename FloatType>
@@ -382,33 +388,42 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 template <typename FloatType>
 void M17Demodulator<FloatType>::do_stream_sync()
 {
+	sync_count += 1;
+	if (sync_count < MIN_SYNC_COUNT) {
+		return;
+	}
+
 	uint8_t sync_index = lsf_sync(correlator);
 	int8_t sync_updated = lsf_sync.updated();
-	sync_count += 1;
-	if (sync_updated < 0)   // Stream sync word
+	if (sync_updated < 0)
 	{
 		missing_sync_count = 0;
-		if (sync_count > 70)
+		update_values(sync_index);
+		sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+		demodState = DemodState::FRAME;
+	}
+	else if (sync_count > MAX_SYNC_COUNT)
+	{
+		// update_values(sync_index);
+		if (viterbi_cost < STREAM_COST_LIMIT)
 		{
-			update_values(sync_index);
+			// Sync word missed but we are still decoding a stream reasonably well.
+			if (!missing_sync_count) missing_sync_count = 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
-		return;
-	}
-	else if (sync_count > 87)
-	{
-		update_values(sync_index);
-		missing_sync_count += 1;
-		if (missing_sync_count < MAX_MISSING_SYNC)
+		else if (missing_sync_count < MAX_MISSING_SYNC)
 		{
+			// Sync word missed, very high error rate.
+			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
 		else
 		{
-			// fputs("\n!SYNC\n", stderr);
-			demodState = DemodState::LSF_SYNC;
+			// Too many sync words missed.  Recycle.
+			demodState = DemodState::UNLOCKED;
+			dcd.unlock();
 		}
 	}
 }
@@ -420,27 +435,40 @@ void M17Demodulator<FloatType>::do_stream_sync()
 template <typename FloatType>
 void M17Demodulator<FloatType>::do_packet_sync()
 {
+	sync_count += 1;
+	if (sync_count < MIN_SYNC_COUNT) {
+		return;
+	}
+
 	auto sync_index = packet_sync(correlator);
 	auto sync_updated = packet_sync.updated();
-	sync_count += 1;
-	if (sync_count > 70 && sync_updated)
+
+	if (sync_updated)
 	{
 		missing_sync_count = 0;
 		update_values(sync_index);
 		sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
 		demodState = DemodState::FRAME;
 	}
-	else if (sync_count > 87)
+	else if (sync_count > MAX_SYNC_COUNT)
 	{
-		missing_sync_count += 1;
-		if (missing_sync_count < MAX_MISSING_SYNC)
+		if (viterbi_cost < PACKET_COST_LIMIT)
 		{
+			// Sync word missed but we are still decoding a stream reasonably well.
+			if (!missing_sync_count) missing_sync_count = 1;
+			sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
+			demodState = DemodState::FRAME;
+		}
+		else if (missing_sync_count < MAX_MISSING_SYNC)
+		{
+			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
 			demodState = DemodState::FRAME;
 		}
 		else
 		{
 			demodState = DemodState::UNLOCKED;
+			dcd.unlock();
 		}
 	}
 }
@@ -451,27 +479,40 @@ void M17Demodulator<FloatType>::do_packet_sync()
 template <typename FloatType>
 void M17Demodulator<FloatType>::do_bert_sync()
 {
+	sync_count += 1;
+	if (sync_count < MIN_SYNC_COUNT) {
+		return;
+	}
+
 	auto sync_index = packet_sync(correlator);
 	auto sync_updated = packet_sync.updated();
-	sync_count += 1;
-	if (sync_count > 70 && sync_updated < 0)
+
+	if (sync_updated < 0)
 	{
 		missing_sync_count = 0;
 		update_values(sync_index);
 		sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 		demodState = DemodState::FRAME;
 	}
-	else if (sync_count > 87)
+	else if (sync_count > MAX_SYNC_COUNT)
 	{
-		missing_sync_count += 1;
-		if (missing_sync_count < MAX_MISSING_SYNC)
+		if (viterbi_cost < STREAM_COST_LIMIT)
 		{
+			// Sync word missed but we are still decoding a stream reasonably well.
+			if (!missing_sync_count) missing_sync_count = 1;
+			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+			demodState = DemodState::FRAME;
+		}
+ 		else if (missing_sync_count < MAX_MISSING_SYNC)
+		{
+			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 			demodState = DemodState::FRAME;
 		}
 		else
 		{
 			demodState = DemodState::UNLOCKED;
+			dcd.unlock();
 		}
 	}
 }
@@ -507,7 +548,6 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 		{
 			cost_count = 0;
 			demodState = DemodState::UNLOCKED;
-			// fputs("\nCOST\n", stderr);
 			return;
 		}
 
@@ -593,7 +633,11 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 		}
 		else if (need_clock_update_) // must avoid update immediately after reset.
 		{
-			clock_recovery.update(sync_sample_index);
+			if (!missing_sync_count) {
+				clock_recovery.update(sync_sample_index);
+			} else if (decoder.state() != M17FrameDecoder::State::LSF) {
+				clock_recovery.update();
+			}
 			sample_index = clock_recovery.sample_index();
 			need_clock_update_ = false;
 		}
