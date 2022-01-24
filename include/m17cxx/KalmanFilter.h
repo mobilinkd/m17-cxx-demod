@@ -23,7 +23,7 @@ struct KalmanFilter
     blaze::StaticMatrix<FloatType, 2, 2> F;
     blaze::StaticMatrix<FloatType, 1, 2> H = {{1., 0.}};
     blaze::StaticMatrix<FloatType, 1, 1> R = {{0.5}};
-    blaze::StaticMatrix<FloatType, 2, 2> Q = {{6.25e-12, 1.25e-11},{1.25e-11, 2.50e-11}};
+    blaze::StaticMatrix<FloatType, 2, 2> Q = {{6.25e-13, 1.25e-12},{1.25e-12, 2.50e-12}};
 
     KalmanFilter()
     {
