@@ -8,7 +8,6 @@
 #include "Convolution.h"
 
 #include <array>
-#include <experimental/array>
 #include <cstdlib>
 #include <cstdint>
 
@@ -31,14 +30,14 @@ inline constexpr std::array<int8_t, 61> make_p1() {
 inline constexpr auto P1 = make_p1();
 
 /// Puncture matrix for audio frames. Rate 6/11.
-inline constexpr auto P2 = std::experimental::make_array<int8_t>(
+inline constexpr auto P2 = std::array<int8_t, 12>{
     1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 0);
+    1, 1, 1, 1, 1, 0};
 
 
 /// Puncture matrix for packet frames (7/8).
-inline constexpr auto P3 = std::experimental::make_array<int8_t>(
-    1, 1, 1, 1, 1, 1, 1, 0);
+inline constexpr auto P3 = std::array<int8_t, 8>{
+    1, 1, 1, 1, 1, 1, 1, 0};
 
 /**
  * Convert an integer value to an array of bits, with the
