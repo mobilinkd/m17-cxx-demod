@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <cstddef>
 
@@ -10,7 +11,7 @@ namespace mobilinkd
 
 inline constexpr uint32_t convolve_bit(uint32_t poly, uint32_t memory)
 {
-    return __builtin_popcount(poly & memory) & 1;
+	return std::popcount(poly & memory) & 1;
 }
 
 template <size_t K, size_t k = 1>

@@ -5,7 +5,7 @@ project(m17cxx
     DESCRIPTION "M17 Digital Voice modulation and demodulation"
     LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 # Require out-of-source builds
 file(TO_CMAKE_PATH "${PROJECT_BINARY_DIR}/CMakeLists.txt" LOC_PATH)
@@ -24,10 +24,9 @@ message(STATUS "# Checking dependencies")
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-include(FindPkgConfig)
 include(GNUInstallDirs)
 
-pkg_check_modules(CODEC2 REQUIRED codec2)
+find_package(codec2 REQUIRED)
 set(Boost_USE_STATIC_LIBS FALSE)
 find_package(Boost COMPONENTS program_options REQUIRED)
 

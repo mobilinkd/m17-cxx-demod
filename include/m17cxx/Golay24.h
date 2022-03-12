@@ -4,6 +4,7 @@
 #pragma once
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <algorithm>
 #include <utility>
@@ -85,11 +86,13 @@ constexpr array<T, N> sort(array<T, N> array)
 // static constexpr uint16_t POLY = 0xAE3;
 constexpr uint16_t POLY = 0xC75;
 
-struct __attribute__((packed)) SyndromeMapEntry
+#pragma pack(push, 1)
+struct SyndromeMapEntry
 {
     uint32_t a{0};
     uint16_t b{0};
 };
+#pragma pack(pop)
 
 /**
  * Calculate the syndrome of a [23,12] Golay codeword.
@@ -110,7 +113,7 @@ constexpr uint32_t syndrome(uint32_t codeword)
 
 constexpr bool parity(uint32_t codeword)
 {
-    return __builtin_popcount(codeword) & 1;
+    return std::popcount(codeword) & 1;
 }
 
 constexpr SyndromeMapEntry makeSyndromeMapEntry(uint64_t val)
@@ -212,7 +215,7 @@ bool decode(uint32_t input, uint32_t& output)
         // Apply the correction to the input.
         output = input ^ correction;
         // Only test parity for 3-bit errors.
-        return __builtin_popcount(syndrm) < 3 || !parity(output);
+        return std::popcount(syndrm) < 3 || !parity(output);
     }
 
     return false;

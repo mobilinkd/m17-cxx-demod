@@ -190,15 +190,15 @@ bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, i
     if (noise_blanker && viterbi_cost > 80)
     {
         buf.fill(0);
-        std::cout.write((const char*)buf.begin(), 320);
-        std::cout.write((const char*)buf.begin(), 320);
+        std::cout.write((const char*)buf.data(), 320);
+        std::cout.write((const char*)buf.data(), 320);
     }
     else
     {
-        codec2_decode(codec2, buf.begin(), audio.begin() + 2);
-        std::cout.write((const char*)buf.begin(), 320);
-        codec2_decode(codec2, buf.begin(), audio.begin() + 10);
-        std::cout.write((const char*)buf.begin(), 320);
+        codec2_decode(codec2, buf.data(), audio.data() + 2);
+        std::cout.write((const char*)buf.data(), 320);
+        codec2_decode(codec2, buf.data(), audio.data() + 10);
+        std::cout.write((const char*)buf.data(), 320);
     }
 
     return result;

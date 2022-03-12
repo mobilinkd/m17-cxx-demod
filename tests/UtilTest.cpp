@@ -2,6 +2,7 @@
 
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <cstdint>
 
 int main(int argc, char **argv) {
@@ -210,7 +211,7 @@ TEST_F(UtilTest, PRBS9)
     uint16_t lfsr = 0x100;
 
     for (size_t i = 0; i != 511; ++i) {
-        lfsr = ((__builtin_popcount(lfsr & 0x11) & 1) << 8) | (lfsr >> 1);
+        lfsr = ((std::popcount(lfsr & 0x11u) & 1) << 8) | (lfsr >> 1);
         bool p = (lfsr & 0x100) == 0x100;
         bool n = prbs.generate();
         EXPECT_EQ(p,n) << "i = " << i;
