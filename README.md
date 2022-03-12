@@ -38,13 +38,12 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
 - Miniconda (or Anaconda) x64 for Windows
 
 ### From a clean Conda environment
-    ```
+    
     conda config --add channels conda-forge
     conda create -n M17 vs2019_win-64 cmake ninja pkg-config boost-cpp gtest gmock gtest libcodec2
     conda activate M17
-    ```
-    
-### From the top level of the m17-cxx-demod repo, execute win_build.bat
+        
+### And then from the top level of the m17-cxx-demod repo, execute win_build.bat
 
 ## Running
 
