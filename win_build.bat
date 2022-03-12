@@ -1,3 +1,10 @@
+::
+:: win_build.bat
+::
+:: Batch file to locally build under Windows using Conda
+::
+:: See README.md for details
+::
 setlocal EnableDelayedExpansion
 @echo on
 
