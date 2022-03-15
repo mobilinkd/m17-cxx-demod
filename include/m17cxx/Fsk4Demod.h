@@ -9,7 +9,6 @@
 #include "SymbolEvm.h"
 
 #include <array>
-#include <experimental/array>
 #include <optional>
 #include <tuple>
 
@@ -18,7 +17,7 @@ namespace mobilinkd
 
 namespace detail
 {
-inline const auto rrc_taps = std::experimental::make_array<double>(
+inline const auto rrc_taps = std::array<double, 79>(
     -0.009265784007800534, -0.006136551625729697, -0.001125978562075172, 0.004891777252042491,
     0.01071805138282269, 0.01505751553351295, 0.01679337935001369, 0.015256245142156299,
     0.01042830577908502, 0.003031522725559901,  -0.0055333532968188165, -0.013403099825723372,
@@ -41,8 +40,8 @@ inline const auto rrc_taps = std::experimental::make_array<double>(
     -0.001125978562075172, -0.006136551625729697, -0.009265784007800534
 );
 
-inline const auto evm_b = std::experimental::make_array<double>(0.02008337, 0.04016673, 0.02008337);
-inline const auto evm_a = std::experimental::make_array<double>(1.0, -1.56101808, 0.64135154);
+inline const auto evm_b = std::array<double, 3>(0.02008337, 0.04016673, 0.02008337);
+inline const auto evm_a = std::array<double, 3>(1.0, -1.56101808, 0.64135154);
 } // detail
 
 struct Fsk4Demod
