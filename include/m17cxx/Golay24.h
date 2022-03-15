@@ -9,11 +9,6 @@
 #include <algorithm>
 #include <utility>
 
-#ifdef _MSC_VER
-#  include <intrin.h>
-#  define __builtin_popcount __popcnt
-#endif
-
 namespace mobilinkd {
 
 // Parts are adapted from:
