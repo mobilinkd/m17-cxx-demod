@@ -256,6 +256,19 @@ void output_bitstream(std::array<uint8_t, 2> sync_word, const bitstream_t& frame
     }
 }
 
+// sym
+void output_symbols(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
+{
+    auto symbols = bits_to_symbols(frame);
+    auto sw = bytes_to_symbols(sync_word);
+
+    std::array<int8_t, 192> temp;
+    auto fit = std::copy(sw.begin(), sw.end(), temp.begin());
+    std::copy(symbols.begin(), symbols.end(), fit);
+    for (auto b : temp) std::cout << b;
+}
+
+
 // rrc
 void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
@@ -273,9 +286,10 @@ void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 
 void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
-    switch(outputType) {
+    switch(outputType) 
+    {
         case OutputType::SYM:
-            //
+            output_symbols(sync_word, frame);
             break;
         case OutputType::BIN:
             output_bitstream(sync_word, frame);
@@ -293,16 +307,21 @@ void send_preamble()
     std::array<uint8_t, 48> preamble_bytes;
     preamble_bytes.fill(0x77);
     switch(outputType) {
-        case OutputType::SYM:
-            //
+        case OutputType::SYM: 
+            {
+                auto preamble_symbols = bytes_to_symbols(preamble_bytes);
+                for (auto b : preamble_symbols) std::cout << b;
+            }
             break;
         case OutputType::BIN:
             for (auto c : preamble_bytes) std::cout << c;
             break;
-        default:  // OutputType::RRC
-            auto preamble_symbols = bytes_to_symbols(preamble_bytes);
-            auto preamble_baseband = symbols_to_baseband(preamble_symbols);
-            for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+        default: 
+            { // OutputType::RRC
+                auto preamble_symbols = bytes_to_symbols(preamble_bytes);
+                auto preamble_baseband = symbols_to_baseband(preamble_symbols);
+                for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+            }
             break;
     }
 }
@@ -318,22 +337,33 @@ void output_eot()
 {
     switch(outputType) {
         case OutputType::SYM:
-            //
+            {
+                std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
+                out_symbols.fill(0);
+                auto symbols = bytes_to_symbols(EOT_SYNC);
+                for (size_t i = 0; i != symbols.size(); ++i)
+                {
+                    out_symbols[i] = symbols[i];
+                }
+                for (auto b : out_symbols) std::cout << b;
+            }
             break;
         case OutputType::BIN:
             for (auto c : EOT_SYNC) std::cout << c;
             for (size_t i = 0; i !=10; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
             break;
-        default: // OutputType::RRC
-            std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
-            out_symbols.fill(0);
-            auto symbols = bytes_to_symbols(EOT_SYNC);
-            for (size_t i = 0; i != symbols.size(); ++i)
-            {
-                out_symbols[i] = symbols[i];
+        default: 
+            { // OutputType::RRC
+                std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
+                out_symbols.fill(0);
+                auto symbols = bytes_to_symbols(EOT_SYNC);
+                for (size_t i = 0; i != symbols.size(); ++i)
+                {
+                    out_symbols[i] = symbols[i];
+                }
+                auto baseband = symbols_to_baseband(out_symbols);
+                for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
             }
-            auto baseband = symbols_to_baseband(out_symbols);
-            for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
             break;
     }
 }
