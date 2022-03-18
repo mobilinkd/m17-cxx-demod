@@ -86,14 +86,14 @@ struct Config
             ("key,k", po::value<uint16_t>(&result.key)->default_value(385),
                 "Linux event code for PTT (default is RADIO).")
             ("bin,b", po::bool_switch(&result.bin), "output packed dibits (default is rrc).")
+            ("rrc,r", po::bool_switch(&result.rrc), "output rrc filtered and scaled symbols (default).")
+            ("sym,s", po::bool_switch(&result.sym), "output symbols (default is rrc).")
             ("bert,B", po::bool_switch(&result.bert),
                 "output a bit error rate test stream (default is read audio from STDIN).")
             ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (only for rrc)")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
             ("quiet,q", po::bool_switch(&result.quiet), "silence all output")
-            ("rrc,r", po::bool_switch(&result.rrc), "output rrc filtered and scaled symbols (default).")
-            ("sym,s", po::bool_switch(&result.sym), "output symbols (default is rrc).")
             ;
 
         po::variables_map vm;

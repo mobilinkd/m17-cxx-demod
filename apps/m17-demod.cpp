@@ -1,6 +1,7 @@
 // Copyright 2020 Mobilinkd LLC.
 
 #include "M17Demodulator.h"
+#include "M17BitDemodulator.h"
 #include "CRC16.h"
 #include "ax25_frame.h"
 #include "FirFilter.h"
@@ -26,6 +27,9 @@ bool invert_input = false;
 bool quiet = false;
 bool debug = false;
 bool noise_blanker = false;
+
+enum class InputType {SYM, BIN, RRC};
+InputType inputType = InputType::RRC;
 
 struct CODEC2 *codec2;
 
@@ -377,6 +381,9 @@ struct Config
     bool invert = false;
     bool lsf = false;
     bool noise_blanker = false;
+    bool bin = false;
+    bool sym = false;
+    bool rrc = true; // default is rrc
 
     static std::optional<Config> parse(int argc, char* argv[])
     {
@@ -391,8 +398,11 @@ struct Config
             ("help,h", "Print this help message and exit.")
             ("version,V", "Print the application verion and exit.")
             ("invert,i", po::bool_switch(&result.invert), "invert the received baseband")
-            ("noise-blanker,b", po::bool_switch(&result.noise_blanker), "noise blanker -- silence likely corrupt audio")
+            ("noise-blanker,n", po::bool_switch(&result.noise_blanker), "noise blanker -- silence likely corrupt audio")
             ("lsf,l", po::bool_switch(&result.lsf), "display the decoded LSF")
+            ("bin,b", po::bool_switch(&result.bin), "input packed dibits (default is rrc).")
+            ("rrc,r", po::bool_switch(&result.rrc), "input rrc filtered and scaled symbols (default).")
+            ("sym,s", po::bool_switch(&result.sym), "input symbols (default is rrc).")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
             ("quiet,q", po::bool_switch(&result.quiet), "silence all output -- no BERT output")
@@ -430,9 +440,16 @@ struct Config
             return std::nullopt;
         }
 
+        if (result.sym + result.bin + result.rrc > 1)
+        {
+            std::cerr << "Only one of sym, bin or rrc may be chosen." << std::endl;
+            return std::nullopt;
+        }
+
         return result;
     }
 };
+
 
 int main(int argc, char* argv[])
 {
@@ -447,6 +464,16 @@ int main(int argc, char* argv[])
     quiet = config->quiet;
     debug = config->debug;
     noise_blanker = config->noise_blanker;
+
+    if (config->sym) {
+        inputType = InputType::SYM;
+    }
+    else if (config->bin) {
+        inputType = InputType::BIN;
+    }
+    else {
+        inputType = InputType::RRC;
+    }
 
     codec2 = ::codec2_create(CODEC2_MODE_3200);
 
@@ -483,10 +510,55 @@ int main(int argc, char* argv[])
 
     while (std::cin)
     {
-        int16_t sample;
-        std::cin.read(reinterpret_cast<char*>(&sample), 2);
-        if (invert_input) sample *= -1;
-        demod(sample / 44000.0);
+        switch(inputType)
+        {
+            case InputType::SYM:
+                {
+                    char c;
+                    std::array<int8_t, 1> symbol; // symbol to read in
+                    std::array<int16_t, 10> samples; // array to hold 10 samples
+                    //std::cin.read(reinterpret_cast<char*>(&symbol), 1);
+                    std::cin.read(reinterpret_cast<char*>(&c), 1);
+                    symbol[0] = (int8_t)c;
+                    samples = symbols_to_baseband(symbol);
+                    for (int i = 0; i < 10; i++)
+                    {
+                        int16_t s = samples[i];
+                        if (invert_input) s *= -1;
+                        demod(s / 44000.0);                                                
+                    }
+                }
+                break;
+            case InputType::BIN:
+                {
+                    char c;
+                    std::array<uint8_t, 1> packedSymbols;  // dibit packed byte to read in
+                    std::array<int8_t, 4> symbols; // converted to 4 symbols
+                    std::array<int16_t, 40> samples; // array to hold 40 samples
+                    //std::cin.read(reinterpret_cast<char*>(&packedSymbols), 1);
+                    std::cin.read(reinterpret_cast<char*>(&c), 1);
+                    packedSymbols[0] = (uint8_t)c;
+                    symbols = bytes_to_symbols(packedSymbols);
+                    samples = symbols_to_baseband(symbols);
+                    for (int i = 0; i < 40; i++)
+                    {
+                        int16_t s = samples[i];
+                        if (invert_input) s *= -1;
+                        demod(s / 44000.0);                                                
+                    }
+                }
+                break;
+            default: // InputType::RRC
+                {
+                    int16_t sample;
+                    std::cin.read(reinterpret_cast<char*>(&sample), 2);
+                    if (invert_input) sample *= -1;
+                    demod(sample / 44000.0);
+                }
+                break;
+        }
+
+
     }
 
     std::cerr << std::endl;
