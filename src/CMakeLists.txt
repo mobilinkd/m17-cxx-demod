@@ -5,7 +5,13 @@ target_include_directories(m17cxx INTERFACE
     $<INSTALL_INTERFACE:include>
     )
 
-target_compile_features(m17cxx INTERFACE cxx_std_17)
+target_compile_features(m17cxx INTERFACE cxx_std_20)
+
+if(MSVC)
+    # specify standards-conformance mode
+    target_compile_options(m17cxx INTERFACE /permissive-)
+    target_compile_definitions(m17cxx INTERFACE _USE_MATH_DEFINES)
+endif()
 
 source_group(
     TREE "${PROJECT_SOURCE_DIR}/include"

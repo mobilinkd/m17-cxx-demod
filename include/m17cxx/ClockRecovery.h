@@ -104,11 +104,11 @@ class ClockRecovery
         int8_t offset = sample_index_ - prev_sample_index_;
 
         // When in spec, the clock should drift by less than 1 sample per frame.
-        if (__builtin_expect(offset >= MAX_OFFSET, 0))
+        if (offset >= MAX_OFFSET) [[unlikely]]
         {
             offset -= SAMPLES_PER_SYMBOL;
         }
-        else if (__builtin_expect(offset <= -MAX_OFFSET, 0))
+        else if (offset <= -MAX_OFFSET) [[unlikely]]
         {
             offset += SAMPLES_PER_SYMBOL;
         }
@@ -120,7 +120,7 @@ class ClockRecovery
     {
         // update_sample_index_() must be called first.
 
-        if (__builtin_expect((frame_count_ == 0), 0))
+        if (frame_count_ == 0) [[unlikely]]
         {
             prev_sample_index_ = sample_index_;
             offset_ = 0.0;

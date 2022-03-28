@@ -32,7 +32,7 @@ struct M17Framer
         if (index_ == N)
         {
             index_ = 0;
-            *result = buffer_.begin();
+            *result = buffer_.data();
             return N;
         }
         return 0;
@@ -46,7 +46,7 @@ struct M17Framer
         if (index_ == N)
         {
             index_ = 0;
-            *result = buffer_.begin();
+            *result = buffer_.data();
             return N;
         }
         return 0;

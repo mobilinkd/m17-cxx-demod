@@ -556,7 +556,7 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 
 	// We need to pump a few ms of data through on startup to initialize
 	// the demodulator.
-	if (__builtin_expect((initializing), 0))
+	if (initializing) [[unlikely]]
 	{
 		--initializing;
 		initialize(input);

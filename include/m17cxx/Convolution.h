@@ -2,20 +2,16 @@
 
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <cstddef>
-
-#ifdef _MSC_VER
-#  include <intrin.h>
-#  define __builtin_popcount __popcnt
-#endif
 
 namespace mobilinkd
 {
 
 inline constexpr uint32_t convolve_bit(uint32_t poly, uint32_t memory)
 {
-    return __builtin_popcount(poly & memory) & 1;
+	return std::popcount(poly & memory) & 1;
 }
 
 template <size_t K, size_t k = 1>

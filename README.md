@@ -31,6 +31,20 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
     make test
     sudo make install
 
+## Build Steps for local building under Anaconda for Windows
+
+### Prequisites
+- Microsoft Visual Studio 2019
+- Miniconda (or Anaconda) x64 for Windows
+
+### From a clean Conda environment
+
+    conda config --add channels conda-forge
+    conda create -n M17 vs2019_win-64 cmake ninja pkg-config boost-cpp gtest gmock gtest libcodec2
+    conda activate M17
+
+### And then from the top level of the m17-cxx-demod repo, execute win_build.bat
+
 ## Running
 
 This program was designed to be used with RTL-SDR, specifically rtl-fm.

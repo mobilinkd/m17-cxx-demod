@@ -2,12 +2,8 @@
 
 #pragma once
 
+#include <bit>
 #include <cstdint>
-
-#ifdef _MSC_VER
-#  include <intrin.h>
-#  define __builtin_popcount __popcnt
-#endif
 
 namespace mobilinkd
 {
@@ -29,7 +25,7 @@ struct M17Synchronizer
         
         buffer_ = ((buffer_ << 2) | bits) & 0xFFFF;
         auto tmp = buffer_ ^ expected_;
-        return __builtin_popcount(tmp) <= allowable_errors_;
+        return std::popcount(tmp) <= allowable_errors_;
     }
     
     void reset() { buffer_ = 0; }
