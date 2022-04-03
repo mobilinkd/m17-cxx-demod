@@ -50,7 +50,7 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
 ### Navigate to: 
     \etc\conda\activate.d\
     
-### And replace ```vs2019_compiler_vars.bat```  with the [File](master/vs2019_compiler_vars.bat).
+### And replace ```vs2019_compiler_vars.bat```  with the [File](vs2019_compiler_vars.bat).
     
 ### Back Inside Conda environment type:
     conda activate M17
