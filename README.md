@@ -1,18 +1,20 @@
 # m17-cxx-demod
 M17 Modulator & Demodulator in C++ (GPL)
 
-## m17-cxx-demod
+## [ WARNING ] APPS FILE READ / WRITE IS EXPERIMENTAL...
+
+## m17-cxx-demod  EXPERIMENTAL VERSION
 This program reads a 48k samples per second 16-bit, little-endian, single
-channel, M17 4-FSK baseband stream from STDIN and writes a demodulated/decoded
-8k SPS 16-bit, single channel audio stream to STDOUT.
+channel, M17 4-FSK baseband RAW BINARY FILE ```output_48k_s16_le.raw``` and writes a demodulated/decoded
+8k SPS 16-bit, single channel RAW BINARY AUDIO FILE ```audio_output_8k_s16_le.raw```.
 
 Some diagnostic information is written to STDERR while the demodulator is
 running.
 
 ## m17-cxx-mod
 This program reads in an 8k sample per second, 16-bit, 1 channel raw audio
-stream from STDIN and writes out an M17 4-FSK baseband stream at 48k SPS,
-16-bit, 1 channel to STDOUT.
+BINARY FILE ```input_8k_s16_le.raw``` and writes out an M17 4-FSK baseband at 48k SPS,
+16-bit, 1 channel to a RAW BINARY FILE ```output_48k_s16_le.raw```.
 
 ## Build
 
@@ -57,18 +59,12 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
 
 ### And then from the top level of the m17-cxx-demod repo, execute win_build.bat
 
-## Running
-
-This program was designed to be used with RTL-SDR, specifically rtl-fm.
-
-    rtl_fm -E offset -f 144.91M -s 48k | m17-demod -l | play -b 16 -r 8000 -c1 -t s16 -
-
-You should run this in a terminal window that is 132 characters wide. It
-will output diagnostic information on a single line in the window.
-
 ## Testing the Modulator
 
-    sox ~/m17-demodulator/brain.wav -t raw - |  ./m17-mod -S WX9O | ./m17-demod -l -d | play -q -b 16 -r 8000 -c1 -t s16 -
+    sox -t raw -b 16 -L -r 8000 -e signed-integer brain.wav input_8k_s16_le.raw
+    ./m17-mod -S PU4THZ
+    ./m17-demod -l -d
+    play -q -b 16 -r 8000 -c1 -t s16 audio_output_8k_s16_le.raw
 
 The input audio stream must be 1 channel, 16-bit, 8000 samples per second.
 
@@ -78,11 +74,12 @@ Use `-b` to output a bitstream rather than baseband.
 
 Use `-h` to see the full help.  Many of the options do not yet work.
 
-The output of the modulator is 48ksps, 16-bit, 1 channel raw audio.
+The output of the modulator is 48ksps, 16-bit, 1 channel raw audio FILE.
 
 To output a bitstream file:
 
-    sox ~/m17-demodulator/brain.wav -t raw - | ./m17-mod -S WX9O -b > m17.bin
+    sox -t raw -b 16 -L -r 8000 -e signed-integer brain.wav input_8k_s16_le.raw
+    ./m17-mod -S WX9O -b > m17.bin
 
 This bitstream file can be fed into [m17-gnuradio](https://github.com/mobilinkd/m17-gnuradio) to
 transmit M17 using a PlutoSDR (or any SDR with an appropriate GNU Radio sink), or loaded into
@@ -92,7 +89,8 @@ I have recently been testing the modulator and demodulator with long-form progra
 that works well is the [AR Newsline](https://www.arnewsline.org/) program.  This is available
 as a downloadable MP3 file.  To convert that to a bitstream, run the following:
 
-    ffmpeg -i ~/Downloads/Report2287.mp3 -ar 8000 -ac 1 -f s16le -acodec pcm_s16le - | ./apps/m17-mod -b -S NS9RC > Report2287.bin
+    ffmpeg -i ~/Downloads/Report2287.mp3 -ar 8000 -ac 1 -f s16le -acodec pcm_s16le input_8k_s16_le.raw
+    ./apps/m17-mod -b -S NS9RC > Report2287.bin
 
 This can then be used with the the `M17_Impaired.grc` GNU Radio flow graph.
 
@@ -122,7 +120,9 @@ modulating the m17.bin file from the
 
 The demodulator diagnostics are calibrated for the following command:
 
-    rtl_fm -F 9 -f 144.91M -s 18k | sox -t s16 -r 18k -c1 - -t raw - gain 9 rate -v -s 48k | ./apps/m17-demod -d -l | play -b 16 -r 8000 -c1 -t s16 -
+    rtl_fm -F 9 -f 144.91M -s 18k | sox -t s16 -r 18k -c1 - -t raw input_8k_s16_le.raw gain 9 rate -v -s 48k
+    ./apps/m17-demod -d -l
+    play -b 16 -r 8000 -c1 -t s16 audio_output_8k_s16_le.raw
 
 Specifically, the initial rate (18k samples per second) and the conversion rate and gain (gain of 9,
 output rate 48k samples per second) are important for deviation and frequency offset.
