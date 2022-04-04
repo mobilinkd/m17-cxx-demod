@@ -19,6 +19,8 @@
 #include <iostream>
 #include <vector>
 
+std::ofstream output;
+
 const char VERSION[] = "2.2";
 
 bool display_lsf = false;
@@ -175,9 +177,11 @@ bool dump_lsf(std::array<T, N> const& lsf)
 }
 
 
-bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, int viterbi_cost)
+bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, int viterbi_cost, std::ofstream& fout)
 {
     bool result = true;
+
+    std::cout << "OK\n";
 
     std::array<int16_t, 160> buf;
     // First two bytes are the frame counter + EOS indicator.
@@ -190,15 +194,15 @@ bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, i
     if (noise_blanker && viterbi_cost > 80)
     {
         buf.fill(0);
-        std::cout.write((const char*)buf.data(), 320);
-        std::cout.write((const char*)buf.data(), 320);
+        fout.write((const char*)buf.data(), 320);
+        fout.write((const char*)buf.data(), 320);
     }
     else
     {
         codec2_decode(codec2, buf.data(), audio.data() + 2);
-        std::cout.write((const char*)buf.data(), 320);
+        fout.write((const char*)buf.data(), 320);
         codec2_decode(codec2, buf.data(), audio.data() + 10);
-        std::cout.write((const char*)buf.data(), 320);
+        fout.write((const char*)buf.data(), 320);
     }
 
     return result;
@@ -319,7 +323,7 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
             std::cerr << "LICH" << std::endl;
             break;
         case FrameType::STREAM:
-            result = demodulate_audio(frame.stream, viterbi_cost);
+            result = demodulate_audio(frame.stream, viterbi_cost, output);
             break;
         case FrameType::BASIC_PACKET:
             result = decode_packet(frame.packet);
@@ -442,6 +446,23 @@ int main(int argc, char* argv[])
     auto config = Config::parse(argc, argv);
     if (!config) return 0;
 
+    auto input_filename = "output_48k_s16_le.raw";
+    auto output_filename = "audio_output_8k_s16_le.raw";
+
+    std::ifstream input(input_filename, std::ios::binary);
+
+    if (!input) {
+        std::cerr << "ERROR READING " << input_filename << "\n";
+        return 1;
+    }
+
+    output.open(output_filename, std::ios::binary);
+
+    if (!output) {
+        std::cerr << "ERROR WRITING " << output_filename << "\n";
+        return 1;
+    }
+
     display_lsf = config->lsf;
     invert_input = config->invert;
     quiet = config->quiet;
@@ -481,10 +502,10 @@ int main(int argc, char* argv[])
     // auto old_rdbuf = std::clog.rdbuf();
     // std::clog.rdbuf(out.rdbuf());
 
-    while (std::cin)
+    while (!input.eof())
     {
         int16_t sample;
-        std::cin.read(reinterpret_cast<char*>(&sample), 2);
+        input.read(reinterpret_cast<char*>(&sample), 2);
         if (invert_input) sample *= -1;
         demod(sample / 44000.0);
     }
@@ -492,6 +513,7 @@ int main(int argc, char* argv[])
     std::cerr << std::endl;
 
     codec2_destroy(codec2);
+    output.close();
 
     // std::clog.rdbuf(old_rdbuf);
 

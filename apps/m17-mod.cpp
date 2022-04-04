@@ -27,6 +27,7 @@
 #include <atomic>
 #include <optional>
 #include <mutex>
+#include <fstream>
 
 #include <cstdlib>
 
@@ -110,7 +111,8 @@ struct Config
 
         try {
             po::notify(vm);
-        } catch (std::exception& ex)
+        }
+        catch (std::exception& ex)
         {
             std::cerr << ex.what() << std::endl;
             std::cout << desc << std::endl;
@@ -144,11 +146,11 @@ struct Config
     }
 };
 
-enum class FrameType {AUDIO, DATA, MIXED, BERT};
+enum class FrameType { AUDIO, DATA, MIXED, BERT };
 
 using lsf_t = std::array<uint8_t, 30>;
 
-std::atomic<bool> running{false};
+std::atomic<bool> running{ false };
 
 bool bitstream = false;
 bool invert = false;
@@ -202,13 +204,13 @@ std::array<int8_t, N * 4> bytes_to_symbols(const std::array<T, N>& bytes)
 }
 
 template <size_t N>
-std::array<int16_t, N*10> symbols_to_baseband(std::array<int8_t, N> symbols)
+std::array<int16_t, N * 10> symbols_to_baseband(std::array<int8_t, N> symbols)
 {
     using namespace mobilinkd;
 
     static BaseFirFilter<double, std::tuple_size<decltype(rrc_taps)>::value> rrc = makeFirFilter(rrc_taps);
 
-    std::array<int16_t, N*10> baseband;
+    std::array<int16_t, N * 10> baseband;
     baseband.fill(0);
     for (size_t i = 0; i != symbols.size(); ++i)
     {
@@ -241,7 +243,7 @@ void output_bitstream(std::array<uint8_t, 2> sync_word, const bitstream_t& frame
     }
 }
 
-void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
+void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame, std::ofstream& fout)
 {
     auto symbols = bits_to_symbols(frame);
     auto sw = bytes_to_symbols(sync_word);
@@ -250,18 +252,16 @@ void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
     auto fit = std::copy(sw.begin(), sw.end(), temp.begin());
     std::copy(symbols.begin(), symbols.end(), fit);
     auto baseband = symbols_to_baseband(temp);
-    for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+    for (auto b : baseband) fout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
 }
 
-
-
-void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
+void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame, std::ofstream& fout)
 {
     if (bitstream) output_bitstream(sync_word, frame);
-    else output_baseband(sync_word, frame);
+    else output_baseband(sync_word, frame, fout);
 }
 
-void send_preamble()
+void send_preamble(std::ofstream& fout)
 {
     // Preamble is simple... bytes -> symbols -> baseband.
     std::cerr << "Sending preamble." << std::endl;
@@ -275,23 +275,23 @@ void send_preamble()
     {
         auto preamble_symbols = bytes_to_symbols(preamble_bytes);
         auto preamble_baseband = symbols_to_baseband(preamble_symbols);
-        for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+        for (auto b : preamble_baseband) fout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
     }
 }
 
-constexpr std::array<uint8_t, 2> SYNC_WORD = {0x32, 0x43};
-constexpr std::array<uint8_t, 2> LSF_SYNC_WORD = {0x55, 0xF7};
-constexpr std::array<uint8_t, 2> STREAM_SYNC_WORD = {0xFF, 0x5D};
-constexpr std::array<uint8_t, 2> PACKET_SYNC_WORD = {0xFF, 0x5D};
-constexpr std::array<uint8_t, 2> BERT_SYNC_WORD = {0xDF, 0x55};
+constexpr std::array<uint8_t, 2> SYNC_WORD = { 0x32, 0x43 };
+constexpr std::array<uint8_t, 2> LSF_SYNC_WORD = { 0x55, 0xF7 };
+constexpr std::array<uint8_t, 2> STREAM_SYNC_WORD = { 0xFF, 0x5D };
+constexpr std::array<uint8_t, 2> PACKET_SYNC_WORD = { 0xFF, 0x5D };
+constexpr std::array<uint8_t, 2> BERT_SYNC_WORD = { 0xDF, 0x55 };
 constexpr std::array<uint8_t, 2> EOT_SYNC = { 0x55, 0x5D };
 
-void output_eot()
+void output_eot(std::ofstream& fout)
 {
     if (bitstream)
     {
         for (auto c : EOT_SYNC) std::cout << c;
-        for (size_t i = 0; i !=10; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
+        for (size_t i = 0; i != 10; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
     }
     else
     {
@@ -303,17 +303,17 @@ void output_eot()
             out_symbols[i] = symbols[i];
         }
         auto baseband = symbols_to_baseband(out_symbols);
-        for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+        for (auto b : baseband) fout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
     }
 }
 
-lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType type = FrameType::AUDIO)
+lsf_t send_lsf(const std::string& src, const std::string& dest, std::ofstream& fout, const FrameType type = FrameType::AUDIO)
 {
     using namespace mobilinkd;
 
     lsf_t result;
     result.fill(0);
-    
+
     M17Randomizer<368> randomizer;
     PolynomialInterleaver<45, 92, 368> interleaver;
     CRC16<0x5935, 0xFFFF> crc;
@@ -325,20 +325,21 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     std::copy(src.begin(), src.end(), callsign.begin());
     auto encoded_src = mobilinkd::LinkSetupFrame::encode_callsign(callsign);
 
-     mobilinkd::LinkSetupFrame::encoded_call_t encoded_dest = {0xff,0xff,0xff,0xff,0xff,0xff};
-     if (!dest.empty())
-     {
+    mobilinkd::LinkSetupFrame::encoded_call_t encoded_dest = { 0xff,0xff,0xff,0xff,0xff,0xff };
+    if (!dest.empty())
+    {
         callsign.fill(0);
         std::copy(dest.begin(), dest.end(), callsign.begin());
         encoded_dest = mobilinkd::LinkSetupFrame::encode_callsign(callsign);
-     }
+    }
 
     auto rit = std::copy(encoded_dest.begin(), encoded_dest.end(), result.begin());
     std::copy(encoded_src.begin(), encoded_src.end(), rit);
     if (type == FrameType::AUDIO) {
         result[12] = can >> 1;
         result[13] = 5 | ((can & 1) << 7);
-    } else if (type == FrameType::BERT) {
+    }
+    else if (type == FrameType::BERT) {
         result[12] = 0;
         result[13] = 1;
     }
@@ -380,7 +381,7 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
 
     interleaver.interleave(punctured);
     randomizer.randomize(punctured);
-    output_frame(LSF_SYNC_WORD, punctured);
+    output_frame(LSF_SYNC_WORD, punctured, fout);
 
     return result;
 }
@@ -547,7 +548,7 @@ lich_segment_t make_lich_segment(std::array<uint8_t, 5> segment, uint8_t segment
     return result;
 }
 
-void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
+void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data, std::ofstream& fout)
 {
     using namespace mobilinkd;
 
@@ -560,10 +561,10 @@ void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
 
     interleaver.interleave(temp);
     randomizer.randomize(temp);
-    output_frame(STREAM_SYNC_WORD, temp);
+    output_frame(STREAM_SYNC_WORD, temp, fout);
 }
 
-void transmit(queue_t& queue, const lsf_t& lsf)
+void transmit(queue_t& queue, const lsf_t& lsf, std::ofstream& fout)
 {
     using namespace mobilinkd;
 
@@ -577,7 +578,7 @@ void transmit(queue_t& queue, const lsf_t& lsf)
         auto lich_segment = make_lich_segment(segment, i);
         std::copy(lich_segment.begin(), lich_segment.end(), lich[i].begin());
     }
-    
+
     struct CODEC2* codec2 = ::codec2_create(CODEC2_MODE_3200);
 
     M17Randomizer<368> randomizer;
@@ -588,7 +589,7 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     size_t index = 0;
     uint16_t frame_number = 0;
     uint8_t lich_segment = 0;
-    while(!queue.is_closed() && queue.empty()) std::this_thread::yield();
+    while (!queue.is_closed() && queue.empty()) std::this_thread::yield();
     while (!queue.is_closed())
     {
         int16_t sample;
@@ -599,10 +600,10 @@ void transmit(queue_t& queue, const lsf_t& lsf)
             index = 0;
             auto data = make_data_frame(frame_number++, encode(codec2, audio));
             if (frame_number == 0x8000) frame_number = 0;
-            send_audio_frame(lich[lich_segment++], data);
+            send_audio_frame(lich[lich_segment++], data, fout);
             if (lich_segment == lich.size()) lich_segment = 0;
             audio.fill(0);
-        } 
+        }
     }
 
     if (index > 0)
@@ -610,20 +611,20 @@ void transmit(queue_t& queue, const lsf_t& lsf)
         // send parial frame;
         auto data = make_data_frame(frame_number++, encode(codec2, audio));
         if (frame_number == 0x8000) frame_number = 0;
-        send_audio_frame(lich[lich_segment++], data);
+        send_audio_frame(lich[lich_segment++], data, fout);
         if (lich_segment == lich.size()) lich_segment = 0;
     }
 
     // Last frame
     audio.fill(0);
     auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
-    send_audio_frame(lich[lich_segment], data);
-    output_eot();
+    send_audio_frame(lich[lich_segment], data, fout);
+    output_eot(fout);
 }
 
 #define USE_OLD_MODULATOR
 #ifdef USE_OLD_MODULATOR
-
+#include <fstream>
 
 int main(int argc, char* argv[])
 {
@@ -636,24 +637,41 @@ int main(int argc, char* argv[])
     invert = config->invert;
     can = config->can;
 
+    auto input_filename = "input_8k_s16_le.raw";
+    auto output_filename = "output_48k_s16_le.raw";
+
+    std::ifstream input(input_filename, std::ios::binary);
+
+    if (!input) {
+        std::cerr << "ERROR READING " << input_filename << "\n";
+        return 1;
+    }
+
+    std::ofstream output(output_filename, std::ios::binary);
+
+    if (!output) {
+        std::cerr << "ERROR WRITING " << output_filename << "\n";
+        return 1;
+    }
+
     signal(SIGINT, &signal_handler);
 
-    send_preamble();
+    send_preamble(output);
 
     if (!config->bert) {
-        auto lsf = send_lsf(config->source_address, config->destination_address);
+        auto lsf = send_lsf(config->source_address, config->destination_address, output);
 
         running = true;
         queue_t queue;
-        std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
+        std::thread thd([&queue, &lsf, &output]() {transmit(queue, lsf, output); });
 
         std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
 
         // Input must be 8000 SPS, 16-bit LE, 1 channel raw audio.
-        while (running)
+        while (running && input.good())
         {
             int16_t sample;
-            if (!std::cin.read(reinterpret_cast<char*>(&sample), 2)) break;
+            if (!input.read(reinterpret_cast<char*>(&sample), 2)) break;
             if (!queue.put(sample, std::chrono::seconds(300))) break;
         }
 
@@ -661,10 +679,11 @@ int main(int argc, char* argv[])
 
         queue.close();
         thd.join();
-    } else {
+    }
+    else {
         PRBS9 prbs;
 
-        send_preamble();
+        send_preamble(output);
         running = true;
         M17Randomizer<368> randomizer;
         PolynomialInterleaver<45, 92, 368> interleaver;
@@ -673,9 +692,11 @@ int main(int argc, char* argv[])
             auto frame = make_bert_frame(prbs);
             interleaver.interleave(frame);
             randomizer.randomize(frame);
-            output_frame(BERT_SYNC_WORD, frame);    
+            output_frame(BERT_SYNC_WORD, frame, output);
         }
     }
+
+    output.close();
 
 
     return EXIT_SUCCESS;
@@ -695,7 +716,7 @@ int main(int argc, char* argv[])
 
     auto audio_queue = std::make_shared<M17Modulator::audio_queue_t>();
     auto bitstream_queue = std::make_shared<M17Modulator::bitstream_queue_t>();
-    
+
     M17Modulator modulator(config->source_address, config->destination_address);
     auto future = modulator.run(audio_queue, bitstream_queue);
     modulator.ptt_on();
@@ -706,7 +727,7 @@ int main(int argc, char* argv[])
     uint8_t bits;
     size_t index = 0;
 
-    std::thread thd([audio_queue](){
+    std::thread thd([audio_queue]() {
         int16_t sample = 0;
         running = true;
         while (running && std::cin)
@@ -715,7 +736,7 @@ int main(int argc, char* argv[])
             audio_queue->put(sample, 5s);
         }
         running = false;
-    });
+        });
 
     while (!running) std::this_thread::yield();
 
