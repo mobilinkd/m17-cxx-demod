@@ -446,8 +446,8 @@ int main(int argc, char* argv[])
     auto config = Config::parse(argc, argv);
     if (!config) return 0;
 
-    auto input_filename = "output_48k_s16_le.raw";
-    auto output_filename = "audio_output_8k_s16_le.raw";
+    auto input_filename = "output_48k_s16_le.rcc";
+    auto output_filename = "audio_output_8k_s16_le.aud";
 
     std::ifstream input(input_filename, std::ios::binary);
 
