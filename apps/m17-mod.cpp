@@ -637,8 +637,8 @@ int main(int argc, char* argv[])
     invert = config->invert;
     can = config->can;
 
-    auto input_filename = "input_8k_s16_le.raw";
-    auto output_filename = "output_48k_s16_le.raw";
+    auto input_filename = "input_8k_s16_le.aud";
+    auto output_filename = "output_48k_s16_le.rcc";
 
     std::ifstream input(input_filename, std::ios::binary);
 
