@@ -5,7 +5,7 @@ M17 Modulator & Demodulator in C++ (GPL)
 
 ## m17-cxx-demod  EXPERIMENTAL VERSION
 This program reads a 48k samples per second 16-bit, little-endian, single
-channel, M17 4-FSK baseband RCC FILE ```output_48k_s16_le.rcc``` and writes a demodulated/decoded
+channel, M17 4-FSK baseband RRC FILE ```output_48k_s16_le.rrc``` and writes a demodulated/decoded
 8k SPS 16-bit, single channel AUD AUDIO FILE ```audio_output_8k_s16_le.aud```.
 
 Some diagnostic information is written to STDERR while the demodulator is
@@ -14,7 +14,7 @@ running.
 ## m17-cxx-mod
 This program reads in an 8k sample per second, 16-bit, 1 channel raw audio
 AUD FILE ```input_8k_s16_le.aud``` and writes out an M17 4-FSK baseband at 48k SPS,
-16-bit, 1 channel to a RCC BINARY FILE ```output_48k_s16_le.rcc```.
+16-bit, 1 channel to a RRC BINARY FILE ```output_48k_s16_le.rrc```.
 
 ## Build
 
@@ -120,7 +120,7 @@ modulating the m17.bin file from the
 
 The demodulator diagnostics are calibrated for the following command:
 
-    rtl_fm -F 9 -f 144.91M -s 18k | sox -t s16 -r 18k -c1 - -t raw input_48k_s16_le.rcc gain 9 rate -v -s 48k
+    rtl_fm -F 9 -f 144.91M -s 18k | sox -t s16 -r 18k -c1 - -t raw input_48k_s16_le.rrc gain 9 rate -v -s 48k
     ./apps/m17-demod -d -l
     play -b 16 -r 8000 -c1 -t s16 audio_output_8k_s16_le.aud
 
