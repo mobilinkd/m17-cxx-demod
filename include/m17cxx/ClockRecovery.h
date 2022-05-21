@@ -22,28 +22,44 @@ struct ClockRecovery
     FloatType clock_estimate_ = 0.;
     FloatType sample_estimate_ = 0.;
 
-    void reset(FloatType z)
+    /**
+     * Reset the clock recovery after the first sync word is received.
+     * This is used as the starting state of the Kalman filter. Providing
+     * the filter with a realistic starting point causes it to converge
+     * must faster.
+     * 
+     * @param[in] index starting sample index.
+     */
+    void reset(FloatType index)
     {
-        kf_.reset(z);
+        kf_.reset(index);
         count_ = 0;
-        sample_index_ = z;
+        sample_index_ = index;
         clock_estimate_ = 0.;
     }
 
+    /// Count each sample.
     void operator()(FloatType)
     {
         ++count_;
     }
 
-    bool update(uint8_t sw)
+    /**
+     * Update the filter with the estimated index from the sync word. The
+     * result is a new estimate of the state, the remote symbol clock offset
+     * relative to our clock.  It can be faster (>0.0) or slower (<0.0).
+     * 
+     * @param[in] index is the new symbol sample position from the sync word.
+     */
+    bool update(uint8_t index)
     {
         if (count_ < 480)
         {
-            sample_index_ = sw;
+            sample_index_ = index;
             return false;
         }
 
-        auto f = kf_.update(sw, count_);
+        auto f = kf_.update(index, count_);
 
         // Constrain sample index to [0..SamplesPerSymbol), wrapping if needed.
         sample_estimate_ = f[0];
