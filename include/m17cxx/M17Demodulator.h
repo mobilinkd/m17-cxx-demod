@@ -151,6 +151,7 @@ struct M17Demodulator
 	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};
 	sync_word_t lsf_sync{{+3,+3,+3,+3,-3,-3,+3,-3}, 32.f, -31.f};	// LSF or STREAM (inverted)
 	sync_word_t packet_sync{{3,-3,3,3,-3,-3,-3,-3}, 31.f, -31.f};	// PACKET or BERT (inverted)
+	sync_word_t eot_sync{{+3,+3,+3,+3,+3,+3,-3,+3}, 31.f};
 
 	FreqDevEstimator<FloatType> dev;
 	FloatType idev;
@@ -306,7 +307,6 @@ void M17Demodulator<FloatType>::do_unlocked()
 		{
 			sync_word_type = M17FrameDecoder::SyncWordType::LSF;
 		}
-		return;
 	}
 	sync_index = packet_sync(correlator);
 	sync_updated = packet_sync.updated();
@@ -339,6 +339,7 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 		sync_triggered = preamble_sync.triggered(correlator);
 		if (sync_triggered > 0.1)
 		{
+			sync_count += 1;
 			return;
 		}
 		sync_triggered = lsf_sync.triggered(correlator);
@@ -369,8 +370,15 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 		}
 		else if (++missing_sync_count > 192)
 		{
-			demodState = DemodState::UNLOCKED;
-			missing_sync_count = 0;
+			if (sync_count >= 10) {
+				missing_sync_count = 0;
+				need_clock_update_ = true;
+			} else {
+				sync_count = 0;
+				demodState = DemodState::UNLOCKED;
+				missing_sync_count = 0;
+				dcd.unlock();
+			}
 		}
 		else
 		{
@@ -388,10 +396,19 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 template <typename FloatType>
 void M17Demodulator<FloatType>::do_stream_sync()
 {
+	static bool eot_flag = false;
+	
 	sync_count += 1;
 	if (sync_count < MIN_SYNC_COUNT) {
 		return;
 	}
+
+	if (eot_sync.triggered(correlator) > 0.1) {
+		sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+		demodState = DemodState::FRAME;
+		eot_flag = true;
+		return;
+    }
 
 	uint8_t sync_index = lsf_sync(correlator);
 	int8_t sync_updated = lsf_sync.updated();
@@ -401,6 +418,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 		update_values(sync_index);
 		sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 		demodState = DemodState::FRAME;
+		eot_flag = false;
 	}
 	else if (sync_count > MAX_SYNC_COUNT)
 	{
@@ -411,6 +429,11 @@ void M17Demodulator<FloatType>::do_stream_sync()
 			if (!missing_sync_count) missing_sync_count = 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
+			if (!missing_sync_count) missing_sync_count = 1;
+		}
+		else if (eot_flag) {
+			demodState = DemodState::UNLOCKED;
+			dcd.unlock();
 		}
 		else if (missing_sync_count < MAX_MISSING_SYNC)
 		{
@@ -425,6 +448,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 			demodState = DemodState::UNLOCKED;
 			dcd.unlock();
 		}
+		eot_flag = false;
 	}
 }
 
@@ -496,6 +520,7 @@ void M17Demodulator<FloatType>::do_bert_sync()
 	}
 	else if (sync_count > MAX_SYNC_COUNT)
 	{
+		missing_sync_count += 1;
 		if (viterbi_cost < STREAM_COST_LIMIT)
 		{
 			// Sync word missed but we are still decoding a stream reasonably well.
@@ -505,7 +530,6 @@ void M17Demodulator<FloatType>::do_bert_sync()
 		}
  		else if (missing_sync_count < MAX_MISSING_SYNC)
 		{
-			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 			demodState = DemodState::FRAME;
 		}
@@ -547,7 +571,7 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 		if (cost_count > 75)
 		{
 			cost_count = 0;
-			demodState = DemodState::UNLOCKED;
+			// demodState = DemodState::UNLOCKED;
 			return;
 		}
 
@@ -630,6 +654,7 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 		{
 			clock_recovery.reset(sync_sample_index);
 			need_clock_reset_ = false;
+			sample_index = sync_sample_index;
 		}
 		else if (need_clock_update_) // must avoid update immediately after reset.
 		{
