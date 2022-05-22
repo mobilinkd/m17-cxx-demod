@@ -316,7 +316,7 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
             result = dump_lsf(frame.lsf);
             break;
         case FrameType::LICH:
-            std::cerr << "LICH" << std::endl;
+            std::cerr << "\nLICH" << std::endl;
             break;
         case FrameType::STREAM:
             result = demodulate_audio(frame.stream, viterbi_cost);
