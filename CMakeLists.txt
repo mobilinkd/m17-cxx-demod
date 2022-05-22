@@ -31,6 +31,26 @@ pkg_check_modules(CODEC2 REQUIRED codec2)
 set(Boost_USE_STATIC_LIBS FALSE)
 find_package(Boost COMPONENTS program_options REQUIRED)
 
+if (BLAZE_INCLUDE_DIR)
+
+  # in cache already
+  set(BLAZE_FOUND TRUE)
+  message(STATUS "Have blaze")
+else (BLAZE_INCLUDE_DIR)
+
+find_path(BLAZE_INCLUDE_DIR NAMES blaze/Blaze.h
+     PATHS
+     ${INCLUDE_INSTALL_DIR}
+   )
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(BLAZE DEFAULT_MSG BLAZE_INCLUDE_DIR)
+
+mark_as_advanced(BLAZE_INCLUDE_DIR)
+message(STATUS "Found blaze")
+
+endif(BLAZE_INCLUDE_DIR)
+
 # Add subdirectories
 add_subdirectory(src)
 add_subdirectory(apps)
