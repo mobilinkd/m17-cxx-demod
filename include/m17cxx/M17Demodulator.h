@@ -135,6 +135,7 @@ struct M17Demodulator
 	static constexpr uint8_t MAX_MISSING_SYNC = 10;
 	static constexpr uint8_t MIN_SYNC_COUNT = 79;
 	static constexpr uint8_t MAX_SYNC_COUNT = 88;
+	static constexpr FloatType EOT_TRIGGER_LEVEL = 0.1;
 
 	using collelator_t = Correlator<FloatType>;
 	using sync_word_t = SyncWord<collelator_t>;
@@ -149,7 +150,7 @@ struct M17Demodulator
 
 	collelator_t correlator;
 	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};
-	sync_word_t lsf_sync{{+3,+3,+3,+3,-3,-3,+3,-3}, 32.f, -31.f};	// LSF or STREAM (inverted)
+	sync_word_t lsf_sync{{+3,+3,+3,+3,-3,-3,+3,-3}, 31.f, -31.f};	// LSF or STREAM (inverted)
 	sync_word_t packet_sync{{3,-3,3,3,-3,-3,-3,-3}, 31.f, -31.f};	// PACKET or BERT (inverted)
 	sync_word_t eot_sync{{+3,+3,+3,+3,+3,+3,-3,+3}, 31.f};
 
@@ -241,6 +242,7 @@ template <typename FloatType>
 void M17Demodulator<FloatType>::dcd_off()
 {
 	// Just lost data carrier.
+	demodState = DemodState::UNLOCKED;
 	dcd_ = false;
 }
 
@@ -371,9 +373,11 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 		else if (++missing_sync_count > 192)
 		{
 			if (sync_count >= 10) {
+				// Long preamble. Update clock and continue waiting for LSF.
 				missing_sync_count = 0;
 				need_clock_update_ = true;
 			} else {
+				// No sync word. Recycle.
 				sync_count = 0;
 				demodState = DemodState::UNLOCKED;
 				missing_sync_count = 0;
@@ -403,10 +407,15 @@ void M17Demodulator<FloatType>::do_stream_sync()
 		return;
 	}
 
-	if (eot_sync.triggered(correlator) > 0.1) {
+	if (eot_sync.triggered(correlator) > EOT_TRIGGER_LEVEL) {
+		// Note the EOT flag but continue trying to decode. This is needed
+		// to avoid false triggers. If it is a true EOT, the stream will
+		// end the next time we try to capture a sync word.
 		sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 		demodState = DemodState::FRAME;
 		eot_flag = true;
+		missing_sync_count = 0;
+		// fputs("\nEOT\n", stderr);
 		return;
     }
 
@@ -425,28 +434,32 @@ void M17Demodulator<FloatType>::do_stream_sync()
 		// update_values(sync_index);
 		if (viterbi_cost < STREAM_COST_LIMIT)
 		{
-			// Sync word missed but we are still decoding a stream reasonably well.
+			// Sync word missed but we are still decoding a stream reasonably
+			// well. Don't increment the missing sync count, but it must not
+			// be 0 when a sync word is missed for clock recovery to work. 
 			if (!missing_sync_count) missing_sync_count = 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
-			if (!missing_sync_count) missing_sync_count = 1;
 		}
 		else if (eot_flag) {
+			// EOT flag set, missing sync, and very high BER. Stream has ended.
 			demodState = DemodState::UNLOCKED;
 			dcd.unlock();
+			// fputs("\nUNLOCK EOT\n", stderr);
 		}
 		else if (missing_sync_count < MAX_MISSING_SYNC)
 		{
-			// Sync word missed, very high error rate.
+			// Sync word missed, very high error rate. Still trying to decode.
 			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
 		else
 		{
-			// Too many sync words missed.  Recycle.
+			// No EOT, but too many sync words missed.  Recycle.
 			demodState = DemodState::UNLOCKED;
 			dcd.unlock();
+			// fputs("\nUNLOCK MISSING SYNC\n", stderr);
 		}
 		eot_flag = false;
 	}
@@ -478,21 +491,25 @@ void M17Demodulator<FloatType>::do_packet_sync()
 	{
 		if (viterbi_cost < PACKET_COST_LIMIT)
 		{
-			// Sync word missed but we are still decoding a stream reasonably well.
+			// Sync word missed but we are still decoding reasonably well.
 			if (!missing_sync_count) missing_sync_count = 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
 			demodState = DemodState::FRAME;
 		}
 		else if (missing_sync_count < MAX_MISSING_SYNC)
 		{
+			// Sync word missed, very high error rate. Still trying to decode.
+			// This may not be appropriate for packet mode.
 			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
 			demodState = DemodState::FRAME;
 		}
 		else
 		{
+			// Too many sync words missed. Recycle.
 			demodState = DemodState::UNLOCKED;
 			dcd.unlock();
+			// fputs("\nUNLOCK\n", stderr);
 		}
 	}
 }
@@ -520,7 +537,6 @@ void M17Demodulator<FloatType>::do_bert_sync()
 	}
 	else if (sync_count > MAX_SYNC_COUNT)
 	{
-		missing_sync_count += 1;
 		if (viterbi_cost < STREAM_COST_LIMIT)
 		{
 			// Sync word missed but we are still decoding a stream reasonably well.
@@ -530,6 +546,7 @@ void M17Demodulator<FloatType>::do_bert_sync()
 		}
  		else if (missing_sync_count < MAX_MISSING_SYNC)
 		{
+			missing_sync_count += 1;
 			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
 			demodState = DemodState::FRAME;
 		}
@@ -537,6 +554,7 @@ void M17Demodulator<FloatType>::do_bert_sync()
 		{
 			demodState = DemodState::UNLOCKED;
 			dcd.unlock();
+			// fputs("\nUNLOCK\n", stderr);
 		}
 	}
 }
@@ -572,7 +590,8 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 		{
 			cost_count = 0;
 			// demodState = DemodState::UNLOCKED;
-			return;
+			// fputs("\nUNLOCK COST\n", stderr);
+			// return;
 		}
 
 		switch (decoder.state())
@@ -599,7 +618,7 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 		case M17FrameDecoder::DecodeResult::FAIL:
 			break;
 		case M17FrameDecoder::DecodeResult::EOS:
-			demodState = DemodState::LSF_SYNC;
+			// demodState = DemodState::LSF_SYNC;
 			break;
 		case M17FrameDecoder::DecodeResult::OK:
 			break;
@@ -659,8 +678,10 @@ void M17Demodulator<FloatType>::operator()(const FloatType input)
 		else if (need_clock_update_) // must avoid update immediately after reset.
 		{
 			if (!missing_sync_count) {
+				// We have a valid sync word. Update the filter.
 				clock_recovery.update(sync_sample_index);
 			} else if (decoder.state() != M17FrameDecoder::State::LSF) {
+				// No valid sync word. Update sample index.
 				clock_recovery.update();
 			}
 			sample_index = clock_recovery.sample_index();
