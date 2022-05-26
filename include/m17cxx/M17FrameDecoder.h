@@ -246,7 +246,7 @@ struct M17FrameDecoder
 
         if (checksum == 0)
         {
-        	lich_segments = 0;
+            lich_segments = 0;
             state_ = State::STREAM;
             viterbi_cost = 0;
             output_buffer.type = FrameType::LSF;
@@ -282,18 +282,10 @@ struct M17FrameDecoder
         viterbi_cost = viterbi_.decode(depuncture_buffer.stream, decode_buffer.stream);
         to_byte_array(decode_buffer.stream, output_buffer.stream);
 
-#if 0 // Using EOT sync word now
-        if ((viterbi_cost < 60) && (output_buffer.stream[0] & 0x80))
-        {
-            // fputs("\nEOS\n", stderr);
-            state_ = State::LSF;
-        }
-#endif
-
         output_buffer.type = FrameType::STREAM;
         callback_(output_buffer, viterbi_cost);
 
-        return state_ == State::LSF ? DecodeResult::EOS : DecodeResult::OK;
+        return DecodeResult::OK;
     }
 
     /**
