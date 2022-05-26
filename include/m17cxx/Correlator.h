@@ -140,11 +140,29 @@ struct SyncWord
 		return (value > limit_1 || value < limit_2) ? value : 0.0;
 	}
 
+	bool is_triggered() const { return triggered_; }
+
+	void find_peak(value_type value)
+	{
+		triggered_ = false;
+		timing_index_ = 0;
+		auto peak_value = value;
+		uint8_t index = 0;
+		for (auto f : samples_)
+		{
+			if (abs(f) > abs(peak_value))
+			{
+				peak_value = f;
+				timing_index_ = index;
+			}
+			index += 1;
+		}
+		updated_ = peak_value > 0 ? 1 : -1;
+	}
+
 	size_t operator()(Correlator& correlator)
 	{
 		auto value = triggered(correlator);
-
-		value_type peak_value = 0;
 
 		if (value != 0)
 		{
@@ -159,21 +177,7 @@ struct SyncWord
 		{
 			if (triggered_)
 			{
-				// Calculate the timing index on the falling edge.
-				triggered_ = false;
-				timing_index_ = 0;
-				peak_value = value;
-				uint8_t index = 0;
-				for (auto f : samples_)
-				{
-					if (abs(f) > abs(peak_value))
-					{
-						peak_value = f;
-						timing_index_ = index;
-					}
-					index += 1;
-				}
-				updated_ = peak_value > 0 ? 1 : -1;
+				find_peak(value);
 			}
 		}
 		return timing_index_;
