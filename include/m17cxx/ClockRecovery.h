@@ -53,12 +53,6 @@ struct ClockRecovery
      */
     bool update(uint8_t index)
     {
-        if (count_ < 480)
-        {
-            sample_index_ = index;
-            return false;
-        }
-
         auto f = kf_.update(index, count_);
 
         // Constrain sample index to [0..SamplesPerSymbol), wrapping if needed.
@@ -81,7 +75,7 @@ struct ClockRecovery
      */
     bool update()
     {
-        auto csw = std::fmod((sample_estimate_ + (1.0 + clock_estimate_) * count_), SamplesPerSymbol);
+        auto csw = std::fmod((sample_estimate_ + clock_estimate_ * count_), SamplesPerSymbol);
         if (csw < 0.) csw += SamplesPerSymbol;
         else if (csw >= SamplesPerSymbol) csw -= SamplesPerSymbol;
 
