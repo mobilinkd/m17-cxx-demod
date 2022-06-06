@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "M17Randomizer.h"
+#include "OPVRandomizer.h"
 #include "PolynomialInterleaver.h"
 #include "Trellis.h"
 #include "Viterbi.h"
@@ -37,11 +37,11 @@ void dump(const std::array<C,N>& data, char header = 'D')
     putchar('\n');
 }
 
-struct M17FrameDecoder
+struct OPVFrameDecoder
 {
     static constexpr size_t MAX_LICH_FRAGMENT = 5;
 
-    M17Randomizer<368> derandomize_;
+    OPVRandomizer<368> derandomize_;
     PolynomialInterleaver<45, 92, 368> interleaver_;
     Trellis<4,2> trellis_{makeTrellis<4, 2>({031,027})};
     Viterbi<decltype(trellis_), 4> viterbi_{trellis_};
@@ -106,7 +106,7 @@ struct M17FrameDecoder
 
     uint8_t lich_segments{0};       ///< one bit per received LICH fragment.
 
-    M17FrameDecoder(callback_t callback)
+    OPVFrameDecoder(callback_t callback)
     : callback_(callback)
     {}
 
@@ -297,7 +297,7 @@ struct M17FrameDecoder
     /**
      * Capture packet frames until an EOF bit is found.
 
-     * @param buffer the demodulated M17 symbols in LLR format.
+     * @param buffer the demodulated OPV symbols in LLR format.
      * @param viterbi_cost the cost of traversing the trellis.
      * @param frame_type is either BASIC_PACKET or FULL_PACKET.
      * @return the result of decoding the packet frame.
@@ -321,7 +321,7 @@ struct M17FrameDecoder
     }
 
     /**
-     * Decode M17 frames.  The decoder uses the sync word to determine frame
+     * Decode OPV frames.  The decoder uses the sync word to determine frame
      * type and to update its state machine.
      *
      * The decoder receives M17 frame type indicator (based on sync word) and

@@ -8,13 +8,13 @@
 namespace mobilinkd
 {
 
-struct M17Synchronizer
+struct OPVSynchronizer
 {
     uint16_t expected_;
     int allowable_errors_;
     uint16_t buffer_ = 0;
 
-    M17Synchronizer(uint16_t word = 0x3243, int bit_errors = 1)
+    OPVSynchronizer(uint16_t word = 0x3243, int bit_errors = 1)
     : expected_(word), allowable_errors_(bit_errors)
     {}
     

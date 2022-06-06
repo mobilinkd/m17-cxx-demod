@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.9)
 
-project(m17cxx
+project(opvcxx
     VERSION 0.1
-    DESCRIPTION "M17 Digital Voice modulation and demodulation"
+    DESCRIPTION "OPV Digital Voice modulation and demodulation"
     LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -44,21 +44,21 @@ endif()
 include(CMakePackageConfigHelpers)
 
 write_basic_package_version_file(
-    "${PROJECT_BINARY_DIR}/m17cxxConfigVersion.cmake"
+    "${PROJECT_BINARY_DIR}/opvcxxConfigVersion.cmake"
     VERSION 0.1
     COMPATIBILITY AnyNewerVersion
     )
 
 configure_package_config_file(
-    "${PROJECT_SOURCE_DIR}/cmake/m17cxxConfig.cmake.in"
-    "${PROJECT_BINARY_DIR}/m17cxxConfig.cmake"
-    INSTALL_DESTINATION lib/cmake/m17cxx
+    "${PROJECT_SOURCE_DIR}/cmake/opvcxxConfig.cmake.in"
+    "${PROJECT_BINARY_DIR}/opvcxxConfig.cmake"
+    INSTALL_DESTINATION lib/cmake/opvcxx
     )
 
-install(EXPORT m17cxxTargets DESTINATION lib/cmake/m17cxx)
-install(FILES "${PROJECT_BINARY_DIR}/m17cxxConfigVersion.cmake"
-              "${PROJECT_BINARY_DIR}/m17cxxConfig.cmake"
-        DESTINATION lib/cmake/m17cxx)
+install(EXPORT opvcxxTargets DESTINATION lib/cmake/opvcxx)
+install(FILES "${PROJECT_BINARY_DIR}/opvcxxConfigVersion.cmake"
+              "${PROJECT_BINARY_DIR}/opvcxxConfig.cmake"
+        DESTINATION lib/cmake/opvcxx)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/ DESTINATION include)
 
 # Create uninstall target

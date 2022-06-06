@@ -1,4 +1,4 @@
-#include "M17Framer.h"
+#include "OPVFramer.h"
 
 #include <gtest/gtest.h>
 
@@ -11,14 +11,14 @@ int main(int argc, char **argv) {
   return RUN_ALL_TESTS();
 }
 
-class M17FramerTest : public ::testing::Test {
+class OPVFramerTest : public ::testing::Test {
  protected:
   void SetUp() override {}
 
   // void TearDown() override {}
 };
 
-TEST_F(M17FramerTest, construct)
+TEST_F(OPVFramerTest, construct)
 {
-    mobilinkd::M17Framer framer;
+    mobilinkd::OPVFramer framer;
 }

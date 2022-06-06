@@ -1,7 +1,7 @@
-add_executable(m17-demod m17-demod.cpp)
-target_link_libraries(m17-demod PRIVATE m17cxx codec2 Boost::program_options)
+add_executable(opv-demod opv-demod.cpp)
+target_link_libraries(opv-demod PRIVATE opvcxx codec2 Boost::program_options)
 
-add_executable(m17-mod m17-mod.cpp)
-target_link_libraries(m17-mod PRIVATE m17cxx codec2 Boost::program_options Threads::Threads)
+add_executable(opv-mod opv-mod.cpp)
+target_link_libraries(opv-mod PRIVATE opvcxx codec2 Boost::program_options Threads::Threads)
 
-install(TARGETS m17-demod m17-mod RUNTIME DESTINATION bin)
+install(TARGETS opv-demod opv-mod RUNTIME DESTINATION bin)

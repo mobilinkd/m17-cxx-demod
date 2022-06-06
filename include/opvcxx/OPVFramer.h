@@ -11,14 +11,14 @@ namespace mobilinkd
 {
 
 template <size_t N = 368>
-struct M17Framer
+struct OPVFramer
 {
     using buffer_t = std::array<int8_t, N>;
 
     alignas(16) buffer_t buffer_;
     size_t index_ = 0;
 
-    M17Framer()
+    OPVFramer()
     {
         reset();
     }

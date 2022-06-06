@@ -23,11 +23,11 @@ inline auto DC = std::array<uint8_t, 46>{
 }
 
 template <size_t N = 368>
-struct M17Randomizer
+struct OPVRandomizer
 {
     std::array<int8_t, N> dc_;
 
-    M17Randomizer()
+    OPVRandomizer()
     {
         size_t i = 0;
         for (auto b : detail::DC)
@@ -59,7 +59,7 @@ struct M17Randomizer
 };
 
 template <size_t N = 46>
-struct M17ByteRandomizer
+struct OPVByteRandomizer
 {
     // Randomize and derandomize are the same operation.
     void operator()(std::array<uint8_t, N>& frame)

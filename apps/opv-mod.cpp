@@ -8,11 +8,11 @@
 #include "Trellis.h"
 #include "Convolution.h"
 #include "PolynomialInterleaver.h"
-#include "M17Randomizer.h"
+#include "OPVRandomizer.h"
 #include "Util.h"
 #include "Golay24.h"
 
-#include "M17Modulator.h"
+#include "OPVModulator.h"
 
 #include <codec2/codec2.h>
 
@@ -96,7 +96,7 @@ struct Config
 
         if (vm.count("help"))
         {
-            std::cout << "Read audio from STDIN and write baseband M17 to STDOUT\n"
+            std::cout << "Read audio from STDIN and write baseband OPV to STDOUT\n"
                 << desc << std::endl;
 
             return std::nullopt;
@@ -314,7 +314,7 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     lsf_t result;
     result.fill(0);
     
-    M17Randomizer<368> randomizer;
+    OPVRandomizer<368> randomizer;
     PolynomialInterleaver<45, 92, 368> interleaver;
     CRC16<0x5935, 0xFFFF> crc;
 
@@ -555,7 +555,7 @@ void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
     auto it = std::copy(lich.begin(), lich.end(), temp.begin());
     std::copy(data.begin(), data.end(), it);
 
-    M17Randomizer<368> randomizer;
+    OPVRandomizer<368> randomizer;
     PolynomialInterleaver<45, 92, 368> interleaver;
 
     interleaver.interleave(temp);
@@ -580,7 +580,7 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     
     struct CODEC2* codec2 = ::codec2_create(CODEC2_MODE_3200);
 
-    M17Randomizer<368> randomizer;
+    OPVRandomizer<368> randomizer;
     PolynomialInterleaver<45, 92, 368> interleaver;
     CRC16<0x5935, 0xFFFF> crc;
 
@@ -647,7 +647,7 @@ int main(int argc, char* argv[])
         queue_t queue;
         std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
 
-        std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
+        std::cerr << "opv-mod running. ctrl-D to break." << std::endl;
 
         // Input must be 8000 SPS, 16-bit LE, 1 channel raw audio.
         while (running)
@@ -666,7 +666,7 @@ int main(int argc, char* argv[])
 
         send_preamble();
         running = true;
-        M17Randomizer<368> randomizer;
+        OPVRandomizer<368> randomizer;
         PolynomialInterleaver<45, 92, 368> interleaver;
 
         while (running) {
@@ -693,16 +693,16 @@ int main(int argc, char* argv[])
 
     signal(SIGINT, &signal_handler);
 
-    auto audio_queue = std::make_shared<M17Modulator::audio_queue_t>();
-    auto bitstream_queue = std::make_shared<M17Modulator::bitstream_queue_t>();
+    auto audio_queue = std::make_shared<OPVModulator::audio_queue_t>();
+    auto bitstream_queue = std::make_shared<OPVModulator::bitstream_queue_t>();
     
-    M17Modulator modulator(config->source_address, config->destination_address);
+    OPVModulator modulator(config->source_address, config->destination_address);
     auto future = modulator.run(audio_queue, bitstream_queue);
     modulator.ptt_on();
 
-    std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
+    std::cerr << "opv-mod running. ctrl-D to break." << std::endl;
 
-    M17Modulator::bitstream_t bitstream;
+    OPVModulator::bitstream_t bitstream;
     uint8_t bits;
     size_t index = 0;
 
@@ -745,7 +745,7 @@ int main(int argc, char* argv[])
             bitstream[index++] = bits;
             if (index == bitstream.size())
             {
-                auto baseband = M17Modulator::symbols_to_baseband(M17Modulator::bytes_to_symbols(bitstream));
+                auto baseband = OPVModulator::symbols_to_baseband(OPVModulator::bytes_to_symbols(bitstream));
                 for (auto b : baseband) std::cout << uint8_t((b & 0xFF00) >> 8) << uint8_t(b & 0xFF);
                 std::cout.flush();
             }

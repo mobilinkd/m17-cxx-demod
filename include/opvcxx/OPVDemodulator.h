@@ -8,8 +8,8 @@
 #include "DataCarrierDetect.h"
 #include "FirFilter.h"
 #include "FreqDevEstimator.h"
-#include "M17FrameDecoder.h"
-#include "M17Framer.h"
+#include "OPVFrameDecoder.h"
+#include "OPVFramer.h"
 #include "Util.h"
 
 #include <algorithm>
@@ -120,7 +120,7 @@ struct Taps<float>
 } // detail
 
 template <typename FloatType>
-struct M17Demodulator
+struct OPVDemodulator
 {
 	static constexpr uint16_t SAMPLE_RATE = 48000;
 	static constexpr uint16_t SYMBOL_RATE = 4800;
@@ -134,7 +134,7 @@ struct M17Demodulator
 
 	using collelator_t = Correlator<FloatType>;
 	using sync_word_t = SyncWord<collelator_t>;
-	using callback_t = M17FrameDecoder::callback_t;
+	using callback_t = OPVFrameDecoder::callback_t;
 	using diagnostic_callback_t = std::function<void(bool, FloatType, FloatType, FloatType, bool, FloatType, int, int, int, int)>;
 
 	enum class DemodState { UNLOCKED, LSF_SYNC, STREAM_SYNC, PACKET_SYNC, BERT_SYNC, FRAME };
@@ -153,10 +153,10 @@ struct M17Demodulator
 	size_t count_ = 0;
 
 	int8_t polarity = 1;
-	M17Framer<368> framer;
-	M17FrameDecoder decoder;
+	OPVFramer<368> framer;
+	OPVFrameDecoder decoder;
 	DemodState demodState = DemodState::UNLOCKED;
-	M17FrameDecoder::SyncWordType sync_word_type = M17FrameDecoder::SyncWordType::LSF;
+	OPVFrameDecoder::SyncWordType sync_word_type = OPVFrameDecoder::SyncWordType::LSF;
 	uint8_t sample_index = 0;
 
 	bool dcd_ = false;
@@ -170,11 +170,11 @@ struct M17Demodulator
 	uint8_t sync_sample_index = 0;
 	diagnostic_callback_t diagnostic_callback;
 
-	M17Demodulator(callback_t callback)
+	OPVDemodulator(callback_t callback)
 	: decoder(callback)
 	{}
 
-	virtual ~M17Demodulator() {}
+	virtual ~OPVDemodulator() {}
 
 	void dcd_on();
 	void dcd_off();
@@ -209,7 +209,7 @@ struct M17Demodulator
 };
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::update_values(uint8_t index)
+void OPVDemodulator<FloatType>::update_values(uint8_t index)
 {
 	correlator.apply([this,index](FloatType t){dev.sample(t);}, index);
 	dev.update();
@@ -217,7 +217,7 @@ void M17Demodulator<FloatType>::update_values(uint8_t index)
 }
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::dcd_on()
+void OPVDemodulator<FloatType>::dcd_on()
 {
 	// Data carrier newly detected.
 	dcd_ = true;
@@ -230,7 +230,7 @@ void M17Demodulator<FloatType>::dcd_on()
 }
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::dcd_off()
+void OPVDemodulator<FloatType>::dcd_off()
 {
 	// Just lost data carrier.
 	dcd_ = false;
@@ -238,14 +238,14 @@ void M17Demodulator<FloatType>::dcd_off()
 }
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::initialize(const FloatType input)
+void OPVDemodulator<FloatType>::initialize(const FloatType input)
 {
 	auto filtered_sample = demod_filter(input);
 	correlator.sample(filtered_sample);
 }
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::update_dcd()
+void OPVDemodulator<FloatType>::update_dcd()
 {
 	if (!dcd_ && dcd.dcd())
 	{
@@ -261,7 +261,7 @@ void M17Demodulator<FloatType>::update_dcd()
 }
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::do_unlocked()
+void OPVDemodulator<FloatType>::do_unlocked()
 {
 	// We expect to find the preamble immediately after DCD.
 	if (missing_sync_count < 1920)
@@ -294,11 +294,11 @@ void M17Demodulator<FloatType>::do_unlocked()
 		demodState = DemodState::FRAME;
 		if (sync_updated < 0)
 		{
-			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+			sync_word_type = OPVFrameDecoder::SyncWordType::STREAM;
 		}
 		else
 		{
-			sync_word_type = M17FrameDecoder::SyncWordType::LSF;
+			sync_word_type = OPVFrameDecoder::SyncWordType::LSF;
 		}
 		return;
 	}
@@ -313,7 +313,7 @@ void M17Demodulator<FloatType>::do_unlocked()
 		update_values(sync_index);
 		sample_index = sync_index;
 		demodState = DemodState::FRAME;
-		sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+		sync_word_type = OPVFrameDecoder::SyncWordType::BERT;
 	}
 }
 
@@ -323,7 +323,7 @@ void M17Demodulator<FloatType>::do_unlocked()
  * has been initialized to a sane value for the baseband.
  */
 template <typename FloatType>
-void M17Demodulator<FloatType>::do_lsf_sync()
+void OPVDemodulator<FloatType>::do_lsf_sync()
 {
 	FloatType sync_triggered = 0.;
 	FloatType bert_triggered = 0.;
@@ -343,7 +343,7 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 			need_clock_update_ = true;
 			update_values(sample_index);
 			demodState = DemodState::FRAME;
-			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+			sync_word_type = OPVFrameDecoder::SyncWordType::BERT;
 		}
 		else if (std::abs(sync_triggered) > 0.1)
 		{
@@ -353,12 +353,12 @@ void M17Demodulator<FloatType>::do_lsf_sync()
 			if (sync_triggered > 0)
 			{
 				demodState = DemodState::FRAME;
-				sync_word_type = M17FrameDecoder::SyncWordType::LSF;
+				sync_word_type = OPVFrameDecoder::SyncWordType::LSF;
 			}
 			else
 			{
 				demodState = DemodState::FRAME;
-				sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+				sync_word_type = OPVFrameDecoder::SyncWordType::STREAM;
 			}
 		}
 		else if (++missing_sync_count > 192)
@@ -380,7 +380,7 @@ void M17Demodulator<FloatType>::do_lsf_sync()
  *
  */
 template <typename FloatType>
-void M17Demodulator<FloatType>::do_stream_sync()
+void OPVDemodulator<FloatType>::do_stream_sync()
 {
 	uint8_t sync_index = lsf_sync(correlator);
 	int8_t sync_updated = lsf_sync.updated();
@@ -391,7 +391,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 		if (sync_count > 70)
 		{
 			update_values(sync_index);
-			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+			sync_word_type = OPVFrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
 		return;
@@ -402,7 +402,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
 		missing_sync_count += 1;
 		if (missing_sync_count < MAX_MISSING_SYNC)
 		{
-			sync_word_type = M17FrameDecoder::SyncWordType::STREAM;
+			sync_word_type = OPVFrameDecoder::SyncWordType::STREAM;
 			demodState = DemodState::FRAME;
 		}
 		else
@@ -418,7 +418,7 @@ void M17Demodulator<FloatType>::do_stream_sync()
  * entered from a valid LSF frame decode with the data/packet type bit set.
  */
 template <typename FloatType>
-void M17Demodulator<FloatType>::do_packet_sync()
+void OPVDemodulator<FloatType>::do_packet_sync()
 {
 	auto sync_index = packet_sync(correlator);
 	auto sync_updated = packet_sync.updated();
@@ -427,7 +427,7 @@ void M17Demodulator<FloatType>::do_packet_sync()
 	{
 		missing_sync_count = 0;
 		update_values(sync_index);
-		sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
+		sync_word_type = OPVFrameDecoder::SyncWordType::PACKET;
 		demodState = DemodState::FRAME;
 	}
 	else if (sync_count > 87)
@@ -435,7 +435,7 @@ void M17Demodulator<FloatType>::do_packet_sync()
 		missing_sync_count += 1;
 		if (missing_sync_count < MAX_MISSING_SYNC)
 		{
-			sync_word_type = M17FrameDecoder::SyncWordType::PACKET;
+			sync_word_type = OPVFrameDecoder::SyncWordType::PACKET;
 			demodState = DemodState::FRAME;
 		}
 		else
@@ -449,7 +449,7 @@ void M17Demodulator<FloatType>::do_packet_sync()
  * Check for a bert sync word.
  */
 template <typename FloatType>
-void M17Demodulator<FloatType>::do_bert_sync()
+void OPVDemodulator<FloatType>::do_bert_sync()
 {
 	auto sync_index = packet_sync(correlator);
 	auto sync_updated = packet_sync.updated();
@@ -458,7 +458,7 @@ void M17Demodulator<FloatType>::do_bert_sync()
 	{
 		missing_sync_count = 0;
 		update_values(sync_index);
-		sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+		sync_word_type = OPVFrameDecoder::SyncWordType::BERT;
 		demodState = DemodState::FRAME;
 	}
 	else if (sync_count > 87)
@@ -466,7 +466,7 @@ void M17Demodulator<FloatType>::do_bert_sync()
 		missing_sync_count += 1;
 		if (missing_sync_count < MAX_MISSING_SYNC)
 		{
-			sync_word_type = M17FrameDecoder::SyncWordType::BERT;
+			sync_word_type = OPVFrameDecoder::SyncWordType::BERT;
 			demodState = DemodState::FRAME;
 		}
 		else
@@ -478,7 +478,7 @@ void M17Demodulator<FloatType>::do_bert_sync()
 
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
+void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 {
 	if (correlator.index() != sample_index) return;
 
@@ -495,7 +495,7 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 	{
 		need_clock_update_ = true;
 
-		M17FrameDecoder::input_buffer_t buffer;
+		OPVFrameDecoder::input_buffer_t buffer;
 		std::copy(tmp, tmp + len, buffer.begin());
 		auto valid = decoder(sync_word_type, buffer, viterbi_cost);
 
@@ -513,14 +513,14 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 
 		switch (decoder.state())
 		{
-		case M17FrameDecoder::State::STREAM:
+		case OPVFrameDecoder::State::STREAM:
 			demodState = DemodState::STREAM_SYNC;
 			break;
-		case M17FrameDecoder::State::LSF:
+		case OPVFrameDecoder::State::LSF:
 			// If state == LSF, we need to recover LSF from LICH.
 			demodState = DemodState::STREAM_SYNC;
 			break;
-		case M17FrameDecoder::State::BERT:
+		case OPVFrameDecoder::State::BERT:
 			demodState = DemodState::BERT_SYNC;
 			break;
 		default:
@@ -532,21 +532,21 @@ void M17Demodulator<FloatType>::do_frame(FloatType filtered_sample)
 
 		switch (valid)
 		{
-		case M17FrameDecoder::DecodeResult::FAIL:
+		case OPVFrameDecoder::DecodeResult::FAIL:
 			break;
-		case M17FrameDecoder::DecodeResult::EOS:
+		case OPVFrameDecoder::DecodeResult::EOS:
 			demodState = DemodState::LSF_SYNC;
 			break;
-		case M17FrameDecoder::DecodeResult::OK:
+		case OPVFrameDecoder::DecodeResult::OK:
 			break;
-		case M17FrameDecoder::DecodeResult::INCOMPLETE:
+		case OPVFrameDecoder::DecodeResult::INCOMPLETE:
 			break;
 		}
 	}
 }
 
 template <typename FloatType>
-void M17Demodulator<FloatType>::operator()(const FloatType input)
+void OPVDemodulator<FloatType>::operator()(const FloatType input)
 {
 	static int16_t initializing = 1920;
 

@@ -1,6 +1,6 @@
 // Copyright 2020 Mobilinkd LLC.
 
-#include "M17Demodulator.h"
+#include "OPVDemodulator.h"
 #include "CRC16.h"
 #include "ax25_frame.h"
 #include "FirFilter.h"
@@ -175,7 +175,7 @@ bool dump_lsf(std::array<T, N> const& lsf)
 }
 
 
-bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, int viterbi_cost)
+bool demodulate_audio(mobilinkd::OPVFrameDecoder::audio_buffer_t const& audio, int viterbi_cost)
 {
     bool result = true;
 
@@ -204,7 +204,7 @@ bool demodulate_audio(mobilinkd::M17FrameDecoder::audio_buffer_t const& audio, i
     return result;
 }
 
-bool decode_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packet_segment)
+bool decode_packet(mobilinkd::OPVFrameDecoder::packet_buffer_t const& packet_segment)
 {
     if (packet_segment[25] & 0x80) // last frame of packet.
     {
@@ -253,7 +253,7 @@ bool decode_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packet_seg
 }
 
 
-bool decode_full_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packet_segment)
+bool decode_full_packet(mobilinkd::OPVFrameDecoder::packet_buffer_t const& packet_segment)
 {
     if (packet_segment[25] & 0x80) // last packet;
     {
@@ -284,7 +284,7 @@ bool decode_full_packet(mobilinkd::M17FrameDecoder::packet_buffer_t const& packe
     return true;
 }
 
-bool decode_bert(mobilinkd::M17FrameDecoder::bert_buffer_t const& bert)
+bool decode_bert(mobilinkd::OPVFrameDecoder::bert_buffer_t const& bert)
 {
     for (int j = 0; j != 24; ++j) {
         auto b = bert[j];
@@ -304,9 +304,9 @@ bool decode_bert(mobilinkd::M17FrameDecoder::bert_buffer_t const& bert)
     return true;
 }
 
-bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int viterbi_cost)
+bool handle_frame(mobilinkd::OPVFrameDecoder::output_buffer_t const& frame, int viterbi_cost)
 {
-    using FrameType = mobilinkd::M17FrameDecoder::FrameType;
+    using FrameType = mobilinkd::OPVFrameDecoder::FrameType;
 
     bool result = true;
 
@@ -403,7 +403,7 @@ struct Config
 
         if (vm.count("help"))
         {
-            std::cout << "Read M17 baseband from STDIN and write audio to STDOUT\n"
+            std::cout << "Read OPV baseband from STDIN and write audio to STDOUT\n"
                 << desc << std::endl;
 
             return std::nullopt;
@@ -452,26 +452,26 @@ int main(int argc, char* argv[])
 
     using FloatType = float;
 
-    M17Demodulator<FloatType> demod(handle_frame);
+    OPVDemodulator<FloatType> demod(handle_frame);
 
 #if 0
     if (display_diags)
     {
-        std::cerr << "Size of M17Demodulator: " << sizeof(demod) << std::endl;
-        std::cerr << "    Size of M17FrameDecoder: " << sizeof(M17FrameDecoder) << std::endl;
-        std::cerr << "        Size of M17Randomizer<368>: " << sizeof(M17Randomizer<368>) << std::endl;
+        std::cerr << "Size of OPVDemodulator: " << sizeof(demod) << std::endl;
+        std::cerr << "    Size of OPVFrameDecoder: " << sizeof(OPVFrameDecoder) << std::endl;
+        std::cerr << "        Size of OPVRandomizer<368>: " << sizeof(OPVRandomizer<368>) << std::endl;
         std::cerr << "        Size of PolynomialInterleaver<45, 92, 368>: " << sizeof(PolynomialInterleaver<45, 92, 368>) << std::endl;
         std::cerr << "        Size of Trellis<4,2>: " << sizeof(Trellis<4,2>) << std::endl;
         std::cerr << "        Size of Viterbi<Trellis<4,2>, 4>: " << sizeof(Viterbi<Trellis<4,2>, 4>) << std::endl;
-        std::cerr << "        Size of output_buffer_t: " << sizeof(M17FrameDecoder::output_buffer_t) << std::endl;
-        std::cerr << "        Size of depunctured_buffer_t: " << sizeof(M17FrameDecoder::depunctured_buffer_t) << std::endl;
-        std::cerr << "        Size of decode_buffer_t: " << sizeof(M17FrameDecoder::decode_buffer_t) << std::endl;
-        std::cerr << "    Size of M17 Matched Filter: " << sizeof(BaseFirFilter<FloatType, detail::Taps<double>::rrc_taps.size()>) << std::endl;
-        std::cerr << "    Size of M17 Correlator: " << sizeof(Correlator<FloatType>) << std::endl;
-        std::cerr << "    Size of M17 SyncWord: " << sizeof(SyncWord<Correlator<FloatType>>) << std::endl;
-        std::cerr << "    Size of M17 DataCarrierDetect: " << sizeof(DataCarrierDetect<FloatType, 48000, 500>) << std::endl;
-        std::cerr << "    Size of M17 ClockRecovery: " << sizeof(ClockRecovery<FloatType, 48000, 4800>) << std::endl;
-        std::cerr << "    Size of M17 M17Framer: " << sizeof(M17Framer<368>) << std::endl;
+        std::cerr << "        Size of output_buffer_t: " << sizeof(OPVFrameDecoder::output_buffer_t) << std::endl;
+        std::cerr << "        Size of depunctured_buffer_t: " << sizeof(OPVFrameDecoder::depunctured_buffer_t) << std::endl;
+        std::cerr << "        Size of decode_buffer_t: " << sizeof(OPVFrameDecoder::decode_buffer_t) << std::endl;
+        std::cerr << "    Size of OPV Matched Filter: " << sizeof(BaseFirFilter<FloatType, detail::Taps<double>::rrc_taps.size()>) << std::endl;
+        std::cerr << "    Size of OPV Correlator: " << sizeof(Correlator<FloatType>) << std::endl;
+        std::cerr << "    Size of OPV SyncWord: " << sizeof(SyncWord<Correlator<FloatType>>) << std::endl;
+        std::cerr << "    Size of OPV DataCarrierDetect: " << sizeof(DataCarrierDetect<FloatType, 48000, 500>) << std::endl;
+        std::cerr << "    Size of OPV ClockRecovery: " << sizeof(ClockRecovery<FloatType, 48000, 4800>) << std::endl;
+        std::cerr << "    Size of OPV OPVFramer: " << sizeof(OPVFramer<368>) << std::endl;
     }
 #endif
 

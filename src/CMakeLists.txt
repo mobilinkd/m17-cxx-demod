@@ -1,16 +1,16 @@
-add_library(m17cxx INTERFACE)
+add_library(opvcxx INTERFACE)
 
-target_include_directories(m17cxx INTERFACE
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/m17cxx>
+target_include_directories(opvcxx INTERFACE
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/opvcxx>
     $<INSTALL_INTERFACE:include>
     )
 
-target_compile_features(m17cxx INTERFACE cxx_std_20)
+target_compile_features(opvcxx INTERFACE cxx_std_20)
 
 if(MSVC)
     # specify standards-conformance mode
-    target_compile_options(m17cxx INTERFACE /permissive-)
-    target_compile_definitions(m17cxx INTERFACE _USE_MATH_DEFINES)
+    target_compile_options(opvcxx INTERFACE /permissive-)
+    target_compile_definitions(opvcxx INTERFACE _USE_MATH_DEFINES)
 endif()
 
 source_group(
@@ -18,8 +18,8 @@ source_group(
     PREFIX "Header Files"
     FILES ${HEADER_LIST})
 
-install(TARGETS m17cxx
-    EXPORT m17cxxTargets
+install(TARGETS opvcxx
+    EXPORT opvcxxTargets
     LIBRARY DESTINATION lib COMPONENT Runtime
     ARCHIVE DESTINATION lib COMPONENT Development
     RUNTIME DESTINATION bin COMPONENT Runtime

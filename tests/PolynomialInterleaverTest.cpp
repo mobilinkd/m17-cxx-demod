@@ -1,5 +1,5 @@
 #include "PolynomialInterleaver.h"
-#include "M17Randomizer.h"
+#include "OPVRandomizer.h"
 
 #include <gtest/gtest.h>
 

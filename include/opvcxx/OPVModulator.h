@@ -6,7 +6,7 @@
 #include "CRC16.h"
 #include "Convolution.h"
 #include "PolynomialInterleaver.h"
-#include "M17Randomizer.h"
+#include "OPVRandomizer.h"
 #include "Util.h"
 #include "Golay24.h"
 #include "Trellis.h"
@@ -85,7 +85,7 @@ namespace mobilinkd
  * There are two public static conversion functions provided to support conversion of
  * the output bitstream into either a symbol stream or into a 48ksps baseband stream.
  */
-struct M17Modulator
+struct OPVModulator
 {
 public:
     using bitstream_queue_t = queue<uint8_t, 96>;   // 1 frame's worth of data, 48 bytes, 192 symbols, 384 bits.
@@ -115,7 +115,7 @@ private:
     std::shared_ptr<bitstream_queue_t> bitstream_queue_;  // Output queue.
     std::atomic<State> state_ = State::INACTIVE;
     struct CODEC2* codec2_ = nullptr;
-    M17ByteRandomizer<46> randomizer_;
+    OPVByteRandomizer<46> randomizer_;
     PolynomialInterleaver<45, 92, 368> interleaver_;
     CRC16<0x5935, 0xFFFF> crc_;
     LinkSetupFrame::encoded_call_t source_;
@@ -464,7 +464,7 @@ private:
 
 public:
 
-    M17Modulator(const std::string& source, const std::string& dest = "")
+    OPVModulator(const std::string& source, const std::string& dest = "")
     : source_(encode_callsign(source))
     , dest_(encode_callsign(dest))
     {}

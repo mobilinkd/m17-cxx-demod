@@ -1,4 +1,4 @@
-#include "M17Randomizer.h"
+#include "OPVRandomizer.h"
 
 #include <gtest/gtest.h>
 
@@ -9,7 +9,7 @@ int main(int argc, char **argv) {
   return RUN_ALL_TESTS();
 }
 
-class M17RandomizerTest : public ::testing::Test {
+class OPVRandomizerTest : public ::testing::Test {
  protected:
   void SetUp() override { }
 
@@ -17,11 +17,11 @@ class M17RandomizerTest : public ::testing::Test {
 
 };
 
-TEST_F(M17RandomizerTest, zero_bytes)
+TEST_F(OPVRandomizerTest, zero_bytes)
 {
     std::array<uint8_t, 46> zeros;
     zeros.fill(0);
-    mobilinkd::M17ByteRandomizer rnd;
+    mobilinkd::OPVByteRandomizer rnd;
     rnd(zeros);
     for (size_t i = 0; i != zeros.size(); ++i)
     {
@@ -29,11 +29,11 @@ TEST_F(M17RandomizerTest, zero_bytes)
     }
 }
 
-TEST_F(M17RandomizerTest, one_bytes)
+TEST_F(OPVRandomizerTest, one_bytes)
 {
     std::array<uint8_t, 46> ones;
     ones.fill(0xFF);
-    mobilinkd::M17ByteRandomizer rnd;
+    mobilinkd::OPVByteRandomizer rnd;
     rnd(ones);
     for (size_t i = 0; i != ones.size(); ++i)
     {
