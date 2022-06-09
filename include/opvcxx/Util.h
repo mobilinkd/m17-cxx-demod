@@ -206,6 +206,14 @@ size_t puncture(const std::array<T, IN>& in,
 
         if (pindex == P) pindex = 0;
     }
+
+    // If the output length is not equal to OUT yet, pad with zeroes.
+    while (index != OUT)
+    {
+        out[index++] = 0;
+        bit_count++;
+    }
+    
     return bit_count;
 }
 

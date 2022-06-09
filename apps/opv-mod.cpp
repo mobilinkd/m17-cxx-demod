@@ -14,7 +14,10 @@
 
 #include "OPVModulator.h"
 
-#include <codec2/codec2.h>
+#include "Numerology.h"
+
+//#include <codec2/codec2.h>
+#include <opus/opus.h>
 
 #include <boost/program_options.hpp>
 #include <boost/optional.hpp>
@@ -119,7 +122,7 @@ struct Config
 
         if (result.debug + result.verbose + result.quiet > 1)
         {
-            std::cerr << "Only one of quiet, verbos or debug may be chosen." << std::endl;
+            std::cerr << "Only one of quiet, verbose or debug may be chosen." << std::endl;
             return std::nullopt;
         }
 
@@ -224,7 +227,7 @@ std::array<int16_t, N*10> symbols_to_baseband(std::array<int8_t, N> symbols)
 }
 
 
-using bitstream_t = std::array<int8_t, 368>;
+using bitstream_t = std::array<int8_t, mobilinkd::frame_size_bits>;
 
 void output_bitstream(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
@@ -264,8 +267,8 @@ void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 void send_preamble()
 {
     // Preamble is simple... bytes -> symbols -> baseband.
-    std::cerr << "Sending preamble." << std::endl;
-    std::array<uint8_t, 48> preamble_bytes;
+    std::cerr << "Sending preamble:" << mobilinkd::frame_size_bytes << std::endl;
+    std::array<uint8_t, mobilinkd::frame_size_bytes> preamble_bytes;
     preamble_bytes.fill(0x77);
     if (bitstream)
     {
@@ -314,8 +317,8 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     lsf_t result;
     result.fill(0);
     
-    OPVRandomizer<368> randomizer;
-    PolynomialInterleaver<45, 92, 368> interleaver;
+    OPVRandomizer<mobilinkd::frame_size_bits> randomizer;
+    PolynomialInterleaver<45, 92, mobilinkd::frame_size_bits> interleaver;
     CRC16<0x5935, 0xFFFF> crc;
 
     std::cerr << "Sending link setup." << std::endl;
@@ -374,9 +377,9 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
         encoded[index++] = mobilinkd::convolve_bit(027, memory);
     }
 
-    std::array<int8_t, 368> punctured;
+    std::array<int8_t, mobilinkd::frame_size_bits> punctured;
     auto size = puncture(encoded, punctured, P1);
-    assert(size == 368);
+    assert(size == mobilinkd::frame_size_bits);
 
     interleaver.interleave(punctured);
     randomizer.randomize(punctured);
@@ -385,33 +388,40 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     return result;
 }
 
-using lich_segment_t = std::array<uint8_t, 96>;
-using lich_t = std::array<lich_segment_t, 6>;
-using queue_t = mobilinkd::queue<int16_t, 320>;
-using audio_frame_t = std::array<int16_t, 320>;
-using codec_frame_t = std::array<uint8_t, 16>;
-using data_frame_t = std::array<int8_t, 272>;
+using lich_segment_t = std::array<uint8_t, 96>; // four Golay blocks encoding 40 + 3 + 5 bits
+using lich_t = std::array<lich_segment_t, 6>;   // LSF encoded for LICH transmission
+using queue_t = mobilinkd::queue<int16_t, 320>; // audio samples in two 20ms Opus frames
+using audio_frame_t = std::array<int16_t, 320>; // audio samples in two 20ms Opus frames
+using codec_frame_t = std::array<uint8_t, 80>;  // bytes in 40ms of Opus-encoded voice
+using data_frame_t = std::array<int8_t, mobilinkd::punctured_payload_size>;
 
 /**
  * Encode 2 frames of data.  Caller must ensure that the audio is
  * padded with 0s if the incoming data is incomplete.
  */
-codec_frame_t encode(struct CODEC2* codec2, const audio_frame_t& audio)
+codec_frame_t encode(OpusEncoder *opus_encoder, const audio_frame_t& audio)
 {
     codec_frame_t result;
-    codec2_encode(codec2, &result[0], const_cast<int16_t*>(&audio[0]));
-    codec2_encode(codec2, &result[8], const_cast<int16_t*>(&audio[160]));
+    opus_int32 count;
+
+    count  = opus_encode(opus_encoder, const_cast<int16_t*>(&audio[0]), mobilinkd::audio_frame_size, &result[0], mobilinkd::opus_frame_size_bytes);
+    count += opus_encode(opus_encoder, const_cast<int16_t*>(&audio[mobilinkd::audio_frame_size]), mobilinkd::audio_frame_size, &result[mobilinkd::opus_frame_size_bytes], mobilinkd::opus_frame_size_bytes);
+
+    if (count != mobilinkd::opus_frame_size_bytes*2)
+    {
+        std::cerr << "Got unexpected encoded voice size" << count;
+    }
+
     return result;
 }
 
-data_frame_t make_data_frame(uint16_t frame_number, const codec_frame_t& payload)
+// This is identical for audio in stream mode or for packet data
+data_frame_t make_data_frame(const codec_frame_t& payload)
 {
-    std::array<uint8_t, 18> data;   // FN, Audio = 2 + 16;
-    data[0] = uint8_t((frame_number >> 8) & 0xFF);
-    data[1] = uint8_t(frame_number & 0xFF);
-    std::copy(payload.begin(), payload.end(), data.begin() + 2);
+    std::array<uint8_t, 80> data;   // if Audio, 2 codec frames of 40 bytes !!!PARAM
+    std::copy(payload.begin(), payload.end(), data.begin());
 
-    std::array<uint8_t, 296> encoded;
+    std::array<uint8_t, 1288> encoded;   // 2 elements for each (data bit + 4 flush bits) !!!PARAM
     size_t index = 0;
     uint32_t memory = 0;
     for (auto b : data)
@@ -435,7 +445,7 @@ data_frame_t make_data_frame(uint16_t frame_number, const codec_frame_t& payload
 
     data_frame_t punctured;
     auto size = mobilinkd::puncture(encoded, punctured, mobilinkd::P2);
-    assert(size == 272);
+    assert(size == mobilinkd::punctured_payload_size);
     return punctured;
 }
 
@@ -499,7 +509,7 @@ bitstream_t make_bert_frame(PRBS& prbs)
 
     bitstream_t punctured;
     auto size = mobilinkd::puncture(encoded, punctured, mobilinkd::P2);
-    assert(size == 368);
+    assert(size == mobilinkd::frame_size_bits);
     return punctured;
 }
 
@@ -547,41 +557,75 @@ lich_segment_t make_lich_segment(std::array<uint8_t, 5> segment, uint8_t segment
     return result;
 }
 
-void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
+void send_audio_frame(const mobilinkd::plheader_t& plh, const data_frame_t& data)
 {
     using namespace mobilinkd;
 
-    std::array<int8_t, 368> temp;
-    auto it = std::copy(lich.begin(), lich.end(), temp.begin());
+    std::array<int8_t, frame_size_bits> temp;
+    auto it = std::copy(plh.begin(), plh.end(), temp.begin());
     std::copy(data.begin(), data.end(), it);
 
-    OPVRandomizer<368> randomizer;
-    PolynomialInterleaver<45, 92, 368> interleaver;
+    PolynomialInterleaver<45, 92, frame_size_bits> interleaver;
+    OPVRandomizer<frame_size_bits> randomizer;
 
     interleaver.interleave(temp);
     randomizer.randomize(temp);
     output_frame(STREAM_SYNC_WORD, temp);
 }
 
-void transmit(queue_t& queue, const lsf_t& lsf)
+mobilinkd::plheader_t create_plheader(void)
+{
+    mobilinkd::plheader_t plh;
+
+    //!!! fill in our plheader here, use config->source_address etc.
+    for (auto b : plh)
+    {
+        b = 1;
+    }
+
+
+    return plh;
+}
+
+void set_last_frame_bit(mobilinkd::plheader_t plh)
+{
+    //!!! set the last frame bit in that plheader here
+}
+
+void transmit(queue_t& queue, const mobilinkd::plheader_t& plh)
 {
     using namespace mobilinkd;
 
+    int encoder_err;    // return code from Opus function calls
+
     assert(running);
-
-    lich_t lich;
-    for (size_t i = 0; i != lich.size(); ++i)
-    {
-        std::array<uint8_t, 5> segment;
-        std::copy(lsf.begin() + i * 5, lsf.begin() + (i + 1) * 5, segment.begin());
-        auto lich_segment = make_lich_segment(segment, i);
-        std::copy(lich_segment.begin(), lich_segment.end(), lich[i].begin());
-    }
     
-    struct CODEC2* codec2 = ::codec2_create(CODEC2_MODE_3200);
+    OpusEncoder* opus_encoder = ::opus_encoder_create(audio_sample_rate, 1, OPUS_APPLICATION_VOIP, &encoder_err);
 
-    OPVRandomizer<368> randomizer;
-    PolynomialInterleaver<45, 92, 368> interleaver;
+    if (encoder_err < 0)
+    {
+        std::cerr << "Failed to create an Opus encoder!";
+        abort();
+    }
+
+    encoder_err = opus_encoder_ctl(opus_encoder, OPUS_SET_BITRATE(opus_bitrate));
+
+    if (encoder_err < 0)
+    {
+        std::cerr << "Failed to set Opus bitrate!";
+        abort();
+    }
+
+    encoder_err = opus_encoder_ctl(opus_encoder, OPUS_SET_VBR(0));
+
+    if (encoder_err < 0)
+    {
+        std::cerr << "Failed to set Opus to constant bit rate!";
+        abort();
+    }
+
+    // OPVRandomizer<frame_size_bits> randomizer;
+    // PolynomialInterleaver<45, 92, frame_size_bits> interleaver;
     CRC16<0x5935, 0xFFFF> crc;
 
     audio_frame_t audio;
@@ -597,27 +641,24 @@ void transmit(queue_t& queue, const lsf_t& lsf)
         if (index == audio.size())
         {
             index = 0;
-            auto data = make_data_frame(frame_number++, encode(codec2, audio));
-            if (frame_number == 0x8000) frame_number = 0;
-            send_audio_frame(lich[lich_segment++], data);
-            if (lich_segment == lich.size()) lich_segment = 0;
+            auto data = make_data_frame(encode(opus_encoder, audio));
+            send_audio_frame(plh, data);
             audio.fill(0);
         } 
     }
 
     if (index > 0)
     {
-        // send parial frame;
-        auto data = make_data_frame(frame_number++, encode(codec2, audio));
-        if (frame_number == 0x8000) frame_number = 0;
-        send_audio_frame(lich[lich_segment++], data);
-        if (lich_segment == lich.size()) lich_segment = 0;
+        // send partial frame;
+        auto data = make_data_frame(encode(opus_encoder, audio));
+        send_audio_frame(plh, data);
     }
 
-    // Last frame
+    // Last frame is an extra frame of silence.
     audio.fill(0);
-    auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
-    send_audio_frame(lich[lich_segment], data);
+    auto data = make_data_frame(encode(opus_encoder, audio));
+    set_last_frame_bit(plh);
+    send_audio_frame(plh, data);
     output_eot();
 }
 
@@ -641,11 +682,11 @@ int main(int argc, char* argv[])
     send_preamble();
 
     if (!config->bert) {
-        auto lsf = send_lsf(config->source_address, config->destination_address);
+        auto plh = create_plheader(); //!!! etc.
 
         running = true;
         queue_t queue;
-        std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
+        std::thread thd([&queue, &plh](){transmit(queue, plh);});
 
         std::cerr << "opv-mod running. ctrl-D to break." << std::endl;
 
@@ -666,8 +707,8 @@ int main(int argc, char* argv[])
 
         send_preamble();
         running = true;
-        OPVRandomizer<368> randomizer;
-        PolynomialInterleaver<45, 92, 368> interleaver;
+        OPVRandomizer<mobilinkd::frame_size_bits> randomizer;
+        PolynomialInterleaver<45, 92, mobilinkd::frame_size_bits> interleaver;
 
         while (running) {
             auto frame = make_bert_frame(prbs);

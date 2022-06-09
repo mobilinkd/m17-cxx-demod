@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Util.h"
+#include "Numerology.h"
 
 #include <algorithm>
 #include <array>
@@ -10,7 +11,7 @@
 namespace mobilinkd
 {
 
-template <size_t F1= 45, size_t F2 = 92, size_t K = 368>
+template <size_t F1= 45, size_t F2 = 92, size_t K = frame_size_bits>
 struct PolynomialInterleaver
 {
     using buffer_t = std::array<int8_t, K>;

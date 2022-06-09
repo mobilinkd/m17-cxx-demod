@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "Numerology.h"
+
 #include <array>
 #include <cstdint>
 #include <cstddef>
@@ -22,7 +24,7 @@ inline auto DC = std::array<uint8_t, 46>{
     0x57, 0x18, 0x2d, 0x29, 0x78, 0xc3};
 }
 
-template <size_t N = 368>
+template <size_t N = frame_size_bits>
 struct OPVRandomizer
 {
     std::array<int8_t, N> dc_;

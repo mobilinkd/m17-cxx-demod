@@ -20,18 +20,18 @@ class PolynomialInterleaverTest : public ::testing::Test {
 
 TEST_F(PolynomialInterleaverTest, byte_bit_interleaver)
 {
-    std::array<uint8_t, 46> dc;
+    std::array<uint8_t, mobilinkd::frame_size_bytes> dc;
     std::copy(mobilinkd::detail::DC.begin(), mobilinkd::detail::DC.end(), dc.begin());
 
-    std::array<int8_t, 368> dc_bits;
-    for (size_t i = 0; i != 368; ++i)
+    std::array<int8_t, mobilinkd::frame_size_bits> dc_bits;
+    for (size_t i = 0; i != mobilinkd::frame_size_bits; ++i)
     {
         dc_bits[i] = mobilinkd::get_bit_index(dc, i);
     }
     mobilinkd::PolynomialInterleaver interleaver;
     interleaver.interleave(dc_bits);
     interleaver.interleave(dc);
-    for (size_t i = 0; i != 368; ++i)
+    for (size_t i = 0; i != mobilinkd::frame_size_bits; ++i)
     {
         EXPECT_EQ(dc_bits[i], mobilinkd::get_bit_index(dc, i));
     }
@@ -39,12 +39,12 @@ TEST_F(PolynomialInterleaverTest, byte_bit_interleaver)
 
 TEST_F(PolynomialInterleaverTest, reinterleave)
 {
-    std::array<uint8_t, 46> dc;
+    std::array<uint8_t, mobilinkd::frame_size_bytes> dc;
     std::copy(mobilinkd::detail::DC.begin(), mobilinkd::detail::DC.end(), dc.begin());
     mobilinkd::PolynomialInterleaver interleaver;
     interleaver.interleave(dc);
     interleaver.interleave(dc); // M17 interleaver is reversable.
-    for (size_t i = 0; i != 46; ++i)
+    for (size_t i = 0; i != mobilinkd::frame_size_bytes; ++i)
     {
         EXPECT_EQ(dc[i], mobilinkd::detail::DC[i]);
     }
@@ -52,12 +52,12 @@ TEST_F(PolynomialInterleaverTest, reinterleave)
 
 TEST_F(PolynomialInterleaverTest, deinterleave)
 {
-    std::array<uint8_t, 46> dc;
+    std::array<uint8_t, mobilinkd::frame_size_bytes> dc;
     std::copy(mobilinkd::detail::DC.begin(), mobilinkd::detail::DC.end(), dc.begin());
     mobilinkd::PolynomialInterleaver interleaver;
     interleaver.interleave(dc);
     interleaver.deinterleave(dc);
-    for (size_t i = 0; i != 46; ++i)
+    for (size_t i = 0; i != mobilinkd::frame_size_bytes; ++i)
     {
         EXPECT_EQ(dc[i], mobilinkd::detail::DC[i]);
     }
