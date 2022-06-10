@@ -56,7 +56,7 @@ struct Config
     bool debug = false;
     bool quiet = false;
     bool bitstream = false; // default is baseband audio
-    bool bert = false; // Bit error rate testing.
+    uint32_t bert = 0; // Frames of Bit error rate testing.
     bool invert = false;
     int can = 10;
 
@@ -86,8 +86,8 @@ struct Config
                 "Linux event code for PTT (default is RADIO).")
             ("bitstream,b", po::bool_switch(&result.bitstream),
                 "output bitstream (default is baseband).")
-            ("bert,B", po::bool_switch(&result.bert),
-                "output a bit error rate test stream (default is read audio from STDIN).")
+            ("bert,B", po::value<uint32_t>(&result.bert)->default_value(0),
+                "number of BERT frames to output (default or 0 to read audio from STDIN instead).")
             ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (ignored for bitstream)")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
@@ -418,7 +418,7 @@ codec_frame_t encode(OpusEncoder *opus_encoder, const audio_frame_t& audio)
 // This is identical for audio in stream mode or for packet data
 data_frame_t make_data_frame(const codec_frame_t& payload)
 {
-    std::array<uint8_t, 80> data;   // if Audio, 2 codec frames of 40 bytes !!!PARAM
+    std::array<uint8_t, mobilinkd::opus_frame_size_bytes*2> data;   // if Audio, 2 codec frames of 40 bytes
     std::copy(payload.begin(), payload.end(), data.begin());
 
     std::array<uint8_t, 1288> encoded;   // 2 elements for each (data bit + 4 flush bits) !!!PARAM
@@ -452,49 +452,27 @@ data_frame_t make_data_frame(const codec_frame_t& payload)
 template <typename PRBS>
 bitstream_t make_bert_frame(PRBS& prbs)
 {
-    std::array<uint8_t, 25> data;   // 24.6125 bytes, 197 bits
+    std::array<uint8_t, mobilinkd::bert_bits_per_frame + mobilinkd::bert_extra_bits> data;   // 769+3 bits
 
     // Generate the data.
-    for (size_t i = 0; i != data.size() - 1; ++i) {
-        uint8_t byte = 0;
-        for (int i = 0; i != 8; ++i) {
-            byte <<= 1;
-            byte |= prbs.generate();
-        }
-        data[i] = byte;
+    size_t i;
+    for (i = 0; i < mobilinkd::bert_bits_per_frame; ++i)
+    {
+        data[i] = prbs.generate();
     }
 
-    uint8_t byte = 0;
-    for (int i = 0; i != 5; ++i) {
-        byte <<= 1;
-        byte |= prbs.generate();
+    for (size_t j = 0; j < mobilinkd::bert_extra_bits; ++j)
+    {
+        data[i+j] = 0;
     }
-    byte <<= 3;
-    data[24] = byte;
 
-
-    std::array<uint8_t, 402> encoded;
+    std::array<uint8_t, mobilinkd::bert_encoded_size> encoded;
     size_t index = 0;
     uint32_t memory = 0;
-    for (size_t i = 0; i != data.size() - 1; ++i)
+    for (size_t i = 0; i < data.size(); ++i)
     {
         auto b = data[i];
-        for (size_t j = 0; j != 8; ++j)
-        {
-            uint32_t x = (b & 0x80) >> 7;
-            b <<= 1;
-            memory = mobilinkd::update_memory<4>(memory, x);
-            encoded[index++] = mobilinkd::convolve_bit(031, memory);
-            encoded[index++] = mobilinkd::convolve_bit(027, memory);
-        }
-    }
-
-    auto b = data[24];
-    for (size_t j = 0; j != 5; ++j)
-    {
-        uint32_t x = (b & 0x80) >> 7;
-        b <<= 1;
-        memory = mobilinkd::update_memory<4>(memory, x);
+        memory = mobilinkd::update_memory<4>(memory, b);
         encoded[index++] = mobilinkd::convolve_bit(031, memory);
         encoded[index++] = mobilinkd::convolve_bit(027, memory);
     }
@@ -507,9 +485,19 @@ bitstream_t make_bert_frame(PRBS& prbs)
         encoded[index++] = mobilinkd::convolve_bit(027, memory);
     }
 
+    assert(index == mobilinkd::bert_encoded_size);
+
     bitstream_t punctured;
     auto size = mobilinkd::puncture(encoded, punctured, mobilinkd::P2);
     assert(size == mobilinkd::frame_size_bits);
+
+    // The punctured BERT frame may not come out to exactly the same size
+    // as the voice stream frame. In that case, pad it to match.
+    for (size_t i = mobilinkd::bert_punctured_size; i < mobilinkd::frame_size_bits; i++)
+    {
+        punctured[i] = 0;
+    }
+
     return punctured;
 }
 
@@ -705,17 +693,24 @@ int main(int argc, char* argv[])
     } else {
         PRBS9 prbs;
 
-        send_preamble();
         running = true;
-        OPVRandomizer<mobilinkd::frame_size_bits> randomizer;
         PolynomialInterleaver<45, 92, mobilinkd::frame_size_bits> interleaver;
+        OPVRandomizer<mobilinkd::frame_size_bits> randomizer;
 
-        while (running) {
+        uint32_t frame_count;
+        for (frame_count = 0; frame_count < config->bert; frame_count++)
+        {
+            if (!running)
+            {
+                break;
+            }
             auto frame = make_bert_frame(prbs);
             interleaver.interleave(frame);
             randomizer.randomize(frame);
             output_frame(BERT_SYNC_WORD, frame);    
         }
+
+        std::cerr << "Output " << frame_count << " frames of BERT data." << std::endl;
     }
 
 
