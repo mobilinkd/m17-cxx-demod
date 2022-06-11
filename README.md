@@ -1,3 +1,9 @@
+# opv-cxx-demod
+
+Opulent Voice Modulator and Demodulator in C++ (GPL)
+
+# THE REST OF THIS README HAS YET TO BE UPDATED FROM M17 to OPV
+
 # m17-cxx-demod
 M17 Modulator & Demodulator in C++ (GPL)
 
