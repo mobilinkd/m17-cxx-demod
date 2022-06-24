@@ -33,3 +33,8 @@
 
 # cmake build directory
 build
+
+# tools storage directories
+.vscode
+.ipynb_checkpoints
+
