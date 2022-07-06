@@ -143,79 +143,6 @@ auto llr(FloatType sample)
     return std::get<1>(*it);
 }
 
-template <size_t M, typename T, size_t N, typename U, size_t IN>
-auto depunctured(std::array<T, N> puncture_matrix, std::array<U, IN> in)
-{
-    static_assert(M % N == 0);
-    std::array<U, M> result;
-    size_t index = 0;
-    size_t pindex = 0;
-    for (size_t i = 0; i != M; ++i)
-    {
-        if (!puncture_matrix[pindex++])
-        {
-            result[i] = 0;
-        }
-        else
-        {
-            result[i] = in[index++];
-        }
-        if (pindex == N) pindex = 0;
-    }
-    return result;
-}
-
-template <size_t IN, size_t OUT, size_t P>
-size_t depuncture(const std::array<int8_t, IN>& in,
-    std::array<int8_t, OUT>& out, const std::array<int8_t, P>& p)
-{
-    size_t index = 0;
-    size_t pindex = 0;
-    size_t bit_count = 0;
-    for (size_t i = 0; i != OUT && index < IN; ++i)
-    {
-        if (!p[pindex++])
-        {
-            out[i] = 0;
-            bit_count++;
-        }
-        else
-        {
-            out[i] = in[index++];
-        }
-        if (pindex == P) pindex = 0;
-    }
-    return bit_count;
-}
-
-
-template <typename T, size_t IN, typename U, size_t OUT, size_t P>
-size_t puncture(const std::array<T, IN>& in,
-    std::array<U, OUT>& out, const std::array<int8_t, P>& p)
-{
-    size_t index = 0;
-    size_t pindex = 0;
-    size_t bit_count = 0;
-    for (size_t i = 0; i != IN && index != OUT; ++i)
-    {
-        if (p[pindex++])
-        {
-            out[index++] = in[i];
-            bit_count++;
-        }
-
-        if (pindex == P) pindex = 0;
-    }
-
-    // If the output length is not equal to OUT yet, pad with zeroes.
-    while (index != OUT)
-    {
-        out[index++] = 0;
-        bit_count++;
-    }
-    
-    return bit_count;
-}
 
 template <size_t N>
 constexpr bool get_bit_index(const std::array<uint8_t, N>& input, size_t index)
@@ -252,26 +179,6 @@ void assign_bit_index(std::array<uint8_t, N>& input, size_t index, bool value)
     else reset_bit_index(input, index);
 }
 
-
-template <size_t IN, size_t OUT, size_t P>
-size_t puncture_bytes(const std::array<uint8_t, IN>& in,
-    std::array<uint8_t, OUT>& out, const std::array<int8_t, P>& p)
-{
-    size_t index = 0;
-    size_t pindex = 0;
-    size_t bit_count = 0;
-    for (size_t i = 0; i != IN * 8 && index != OUT * 8; ++i)
-    {
-        if (p[pindex++])
-        {
-            assign_bit_index(out, index++, get_bit_index(in, i));
-            bit_count++;
-        }
-
-        if (pindex == P) pindex = 0;
-    }
-    return bit_count;
-}
 
 /**
  * Sign-extend an n-bit value to a specific signed integer type.

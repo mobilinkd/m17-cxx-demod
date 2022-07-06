@@ -86,28 +86,6 @@ TEST_F(UtilTest, assign_bit_index)
     EXPECT_EQ(data[0], 0x71);
 }
 
-TEST_F(UtilTest, puncture_bytes)
-{
-    using mobilinkd::puncture_bytes;
-    using mobilinkd::get_bit_index;
-
-    std::array<uint8_t, 8> data = {0x55,0x55,0x55,0x55,0x55,0x55,0x55,0x55};
-    std::array<int8_t, 8> PM = {1,1,1,1,1,1,1,0};
-    std::array<uint8_t, 7> out;
-
-    out.fill(0);
-    auto result = puncture_bytes(data, out, PM);
-
-    EXPECT_EQ(result, 56);
-    EXPECT_EQ(get_bit_index(out, 48), 0);
-    EXPECT_EQ(get_bit_index(out, 49), 0);
-    EXPECT_EQ(get_bit_index(out, 50), 1);
-    EXPECT_EQ(get_bit_index(out, 51), 0);
-    EXPECT_EQ(get_bit_index(out, 52), 1);
-    EXPECT_EQ(get_bit_index(out, 53), 0);
-    EXPECT_EQ(get_bit_index(out, 54), 1);
-    EXPECT_EQ(get_bit_index(out, 55), 0);
-}
 
 TEST_F(UtilTest, llr_size)
 {

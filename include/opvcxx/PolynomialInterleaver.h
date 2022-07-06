@@ -11,7 +11,7 @@
 namespace mobilinkd
 {
 
-template <size_t F1= 45, size_t F2 = 92, size_t K = frame_size_bits>
+template <size_t F1= 45, size_t F2 = 92, size_t K = stream_type4_size>
 struct PolynomialInterleaver
 {
     using buffer_t = std::array<int8_t, K>;

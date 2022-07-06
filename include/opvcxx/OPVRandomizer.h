@@ -24,7 +24,7 @@ inline auto DC = std::array<uint8_t, 46>{
     0x57, 0x18, 0x2d, 0x29, 0x78, 0xc3};
 }
 
-template <size_t N = frame_size_bits>
+template <size_t N = stream_type4_size>
 struct OPVRandomizer
 {
     std::array<int8_t, N> dc_;

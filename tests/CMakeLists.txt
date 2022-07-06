@@ -51,9 +51,9 @@ add_executable (UtilTest UtilTest.cpp)
 target_link_libraries(UtilTest opvcxx GTest::GTest ${PTHREAD})
 gtest_add_tests(UtilTest "" AUTO)
 
-add_executable (LinkSetupFrameTest LinkSetupFrameTest.cpp)
-target_link_libraries(LinkSetupFrameTest opvcxx GTest::GTest ${PTHREAD})
-gtest_add_tests(LinkSetupFrameTest "" AUTO)
+add_executable (FrameHeaderTest FrameHeaderTest.cpp)
+target_link_libraries(FrameHeaderTest opvcxx GTest::GTest ${PTHREAD})
+gtest_add_tests(FrameHeaderTest "" AUTO)
 
 add_executable (SlidingDFTTest SlidingDFTTest.cpp)
 target_link_libraries(SlidingDFTTest opvcxx GTest::GTest ${PTHREAD})
