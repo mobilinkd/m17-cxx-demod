@@ -7,7 +7,7 @@ namespace mobilinkd
 {
     const int opus_bitrate = 16000;         // target output bit rate from voice encoder
 
-    const int audio_sample_rate = 8000;     // 16-bit PCM samples per second for audio signals
+    const int audio_sample_rate = 48000;     // 16-bit PCM samples per second for audio signals
     const int audio_frame_size = audio_sample_rate * 0.04;  // PCM samples per audio frame (two codec frames)
     const int audio_frame_sample_bytes = audio_frame_size * 2;  // 2 bytes per PCM sample
 
