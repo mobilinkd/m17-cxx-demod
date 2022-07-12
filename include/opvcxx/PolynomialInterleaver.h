@@ -15,7 +15,7 @@ namespace mobilinkd
 // This interleaver is optimized for 16,000bps Opulent Voice frames,
 // and achieves a minimum distance proportional to that of the M17
 // interleaver. 
-template <size_t F1= 177, size_t F2 = 370, size_t K = stream_type4_size>
+template <size_t F1= PolynomialInterleaverX, size_t F2 = PolynomialInterleaverX2, size_t K = stream_type4_size>
 struct PolynomialInterleaver
 {
     using buffer_t = std::array<int8_t, K>;

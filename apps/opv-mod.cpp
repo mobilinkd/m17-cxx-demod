@@ -486,7 +486,7 @@ void send_stream_frame(const encoded_fheader_t& fh, const type3_data_frame_t& da
     auto payload_offset = std::copy(fh.begin(), fh.end(), temp.begin());
     std::copy(data.begin(), data.end(), payload_offset);
 
-    PolynomialInterleaver<45, 92, stream_type4_size> interleaver;   //!!! different interleaver needed?
+    PolynomialInterleaver<PolynomialInterleaverX, PolynomialInterleaverX2, stream_type4_size> interleaver;
     OPVRandomizer<stream_type4_size> randomizer;
 
     interleaver.interleave(temp);
@@ -620,7 +620,7 @@ int main(int argc, char* argv[])
         PRBS9 prbs;
 
         running = true;
-        PolynomialInterleaver<45, 92, stream_type4_size> interleaver;
+        PolynomialInterleaver<PolynomialInterleaverX, PolynomialInterleaverX2, stream_type4_size> interleaver;
         OPVRandomizer<stream_type4_size> randomizer;
 
         uint32_t frame_count;

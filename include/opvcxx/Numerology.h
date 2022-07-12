@@ -48,4 +48,7 @@ namespace mobilinkd
     static_assert(bert_frame_prime_size % 31 != 0, "BERT prime size not prime");
     static_assert(bert_frame_prime_size % 37 != 0, "BERT prime size not prime");
     static_assert(bert_frame_prime_size % 41 != 0, "BERT prime size not prime");
+
+    const int PolynomialInterleaverX = 177;
+    const int PolynomialInterleaverX2 = 370;
 }
