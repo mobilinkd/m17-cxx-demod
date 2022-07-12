@@ -408,8 +408,8 @@ void dump_fheader(const fheader_t header)
     }
 
     //
-    if (header[9] & 0x80) std::cerr << "last ";
-    if (header[9] & 0x40) std::cerr << "BERT";
+    if (header[6] & 0x80) std::cerr << "last ";
+    if (header[6] & 0x40) std::cerr << "BERT";
 
     std::cerr << std::endl << std::dec;
 }
@@ -429,10 +429,9 @@ fheader_t fill_fheader(const std::string& source_callsign, OPVFrameHeader::token
     uint8_t flags = 0;
     if (is_bert) flags |= 0x40;
 
-    auto it = std::copy(encoded_callsign.begin(), encoded_callsign.end(), header.begin());
-    it = std::copy(access_token.begin(), access_token.end(), it);
-    header[9] = flags;
-    //!!! fill in the rest of the header
+    std::copy(encoded_callsign.begin(), encoded_callsign.end(), header.begin());
+    std::copy(access_token.begin(), access_token.end(), header.begin() + 9);
+    header[6] = flags;
 
     if (config->verbose) dump_fheader(header);
 
@@ -443,7 +442,7 @@ fheader_t fill_fheader(const std::string& source_callsign, OPVFrameHeader::token
 // Modify the frame header to set the EOS (end of stream) bit
 void set_last_frame_bit(fheader_t& fh)
 {
-    fh[9] |= 0x80;
+    fh[6] |= 0x80;
 }
 
 
@@ -591,7 +590,7 @@ int main(int argc, char* argv[])
     access_token[1] = (config->token & 0x00ff00) >> 8;
     access_token[2] = (config->token & 0x0000ff);
 
-    auto fh = fill_fheader(config->source_address, access_token, config->bert != 0);  //!!! add parameters
+    auto fh = fill_fheader(config->source_address, access_token, config->bert != 0);
     auto encoded_fh = encode_fheader(fh);
 
     signal(SIGINT, &signal_handler);

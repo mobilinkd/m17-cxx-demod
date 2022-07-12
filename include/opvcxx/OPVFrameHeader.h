@@ -162,20 +162,20 @@ struct OPVFrameHeader
             for (auto x : callsign) if (x) std::cerr << x;
         }
 
-        // If the decoded authentication token has changed, store it
-        if (! std::equal(raw_fh.begin() + 6, raw_fh.begin() + 9, raw_fheader_.begin() + 6))
+        // If the decoded flags have changed, store them
+        if (! std::equal(raw_fh.begin() + 12, raw_fh.begin() + 18, raw_fheader_.begin() + 12))
         {
             result = HeaderResult::UPDATED;
-            std::copy(raw_fh.begin() + 6, raw_fh.begin() + 9, token.begin());
-            std::cerr << "Token: " << std::hex << token[0] << token[1] << token[2] << std::dec;
+            flags = ((raw_fh[6] << 16) & 0xff0000) | ((raw_fh[7] << 8) & 0x00ff00) | (raw_fh[8] & 0x0000ff);
+            std::cerr << "Flags: " << std::hex << flags << std::dec;
         }
 
-        // If the decoded flags have changed, store them
+        // If the decoded authentication token has changed, store it
         if (! std::equal(raw_fh.begin() + 18, raw_fh.end(), raw_fheader_.begin() + 18))
         {
             result = HeaderResult::UPDATED;
-            flags = ((raw_fh[9] << 16) & 0xff0000) | ((raw_fh[10] << 8) & 0x00ff00) | (raw_fh[11] & 0x0000ff);
-            std::cerr << "Flags: " << std::hex << flags << std::dec;
+            std::copy(raw_fh.begin() + 9, raw_fh.end(), token.begin());
+            std::cerr << "Token: " << std::hex << token[0] << token[1] << token[2] << std::dec;
         }
 
         if (result == HeaderResult::UPDATED)
