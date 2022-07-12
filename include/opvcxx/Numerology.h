@@ -9,6 +9,7 @@ namespace mobilinkd
 
     const int audio_sample_rate = 8000;     // 16-bit PCM samples per second for audio signals
     const int audio_frame_size = audio_sample_rate * 0.04;  // PCM samples per audio frame (two codec frames)
+    const int audio_frame_sample_bytes = audio_frame_size * 2;  // 2 bytes per PCM sample
 
     // Simplified Frame Format for OPUlent Voice
     const int fheader_size_bytes = 12;        // bytes in a frame header (multiple of 3 for Golay encoding)
@@ -27,6 +28,10 @@ namespace mobilinkd
 
     const int bert_frame_total_size = stream_frame_payload_size;
     const int bert_frame_prime_size = 631;      // largest prime smaller than bert_frame_total_size
+
+    const int symbol_rate = baseband_frame_symbols / 0.04;  // symbols per second
+    const int sample_rate = symbol_rate * 10;               // sample rate
+    const int samples_per_frame = sample_rate * 0.04;       // samples per 40ms frame
 
     static_assert((stream_type3_payload_size % 8) == 0, "Type3 payload size not an integer number of bytes");
     static_assert(bert_frame_prime_size < bert_frame_total_size, "BERT prime size not less than BERT total size");

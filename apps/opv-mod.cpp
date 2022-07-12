@@ -563,6 +563,8 @@ void transmit(queue_t& queue, fheader_t& fh)
     efh = encode_fheader(fh);
     send_stream_frame(efh, type4_data);
     output_eot();
+
+    opus_encoder_destroy(opus_encoder);
 }
 
 

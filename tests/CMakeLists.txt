@@ -43,10 +43,6 @@ add_executable (PolynomialInterleaverTest PolynomialInterleaverTest.cpp)
 target_link_libraries(PolynomialInterleaverTest opvcxx GTest::GTest ${PTHREAD})
 gtest_add_tests(PolynomialInterleaverTest "" AUTO)
 
-add_executable (OPVModulatorTest OPVModulatorTest.cpp)
-target_link_libraries(OPVModulatorTest opvcxx GTest::GTest ${PTHREAD} codec2)
-gtest_add_tests(OPVModulatorTest "" AUTO)
-
 add_executable (UtilTest UtilTest.cpp)
 target_link_libraries(UtilTest opvcxx GTest::GTest ${PTHREAD})
 gtest_add_tests(UtilTest "" AUTO)
