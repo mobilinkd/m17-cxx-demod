@@ -556,7 +556,7 @@ void OPVDemodulator<FloatType>::operator()(const FloatType input)
 
 	// We need to pump a few ms of data through on startup to initialize
 	// the demodulator.
-	if (initializing) [[unlikely]]
+	if (initializing) //!!! [[unlikely]]
 	{
 		--initializing;
 		initialize(input);
