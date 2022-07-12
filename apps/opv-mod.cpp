@@ -9,7 +9,7 @@
 #include "OPVRandomizer.h"
 #include "Util.h"
 #include "Golay24.h"
-#include "FrameHeader.h"
+#include "OPVFrameHeader.h"
 
 #include "Numerology.h"
 #include <opus/opus.h>
@@ -416,16 +416,16 @@ void dump_fheader(const fheader_t header)
 
 
 // Generate the frame header
-fheader_t fill_fheader(const std::string& source_callsign, FrameHeader::token_t& access_token, bool is_bert)
+fheader_t fill_fheader(const std::string& source_callsign, OPVFrameHeader::token_t& access_token, bool is_bert)
 {
     fheader_t header;
 
     header.fill(0);
 
-    FrameHeader::call_t callsign;
+    OPVFrameHeader::call_t callsign;
     callsign.fill(0);
     std::copy(source_callsign.begin(), source_callsign.end(), callsign.begin());
-    auto encoded_callsign = FrameHeader::encode_callsign(callsign);
+    auto encoded_callsign = OPVFrameHeader::encode_callsign(callsign);
     uint8_t flags = 0;
     if (is_bert) flags |= 0x40;
 
@@ -583,7 +583,7 @@ int main(int argc, char* argv[])
 
     invert = config->invert;
 
-    FrameHeader::token_t access_token;
+    OPVFrameHeader::token_t access_token;
     std::cerr << "Access token: " << std::hex << std::setw(6) << config->token << std::dec << std::endl;
     access_token[0] = (config->token & 0xff0000) >> 16;
     access_token[1] = (config->token & 0x00ff00) >> 8;

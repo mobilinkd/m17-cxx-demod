@@ -1,4 +1,4 @@
-#include "FrameHeader.h"
+#include "OPVFrameHeader.h"
 
 #include <gtest/gtest.h>
 
@@ -18,8 +18,8 @@ class FrameHeaderTest : public ::testing::Test {
 
 TEST_F(FrameHeaderTest, encode_callsign)
 {
-    mobilinkd::FrameHeader::call_t callsign = {'W', 'X', '9', 'O'};
-    auto encoded = mobilinkd::FrameHeader::encode_callsign(callsign);
+    mobilinkd::OPVFrameHeader::call_t callsign = {'W', 'X', '9', 'O'};
+    auto encoded = mobilinkd::OPVFrameHeader::encode_callsign(callsign);
     EXPECT_EQ(encoded[0], 0);
     EXPECT_EQ(encoded[1], 0);
     EXPECT_EQ(encoded[2], 0);
@@ -30,8 +30,8 @@ TEST_F(FrameHeaderTest, encode_callsign)
 
 TEST_F(FrameHeaderTest, decode_callsign)
 {
-    mobilinkd::FrameHeader::encoded_call_t encoded = {0, 0, 0, 0x0f, 0x8a, 0xd7};
-    auto callsign = mobilinkd::FrameHeader::decode_callsign(encoded);
+    mobilinkd::OPVFrameHeader::encoded_call_t encoded = {0, 0, 0, 0x0f, 0x8a, 0xd7};
+    auto callsign = mobilinkd::OPVFrameHeader::decode_callsign(encoded);
     EXPECT_EQ(callsign[0], 'W');
     EXPECT_EQ(callsign[1], 'X');
     EXPECT_EQ(callsign[2], '9');
@@ -41,8 +41,8 @@ TEST_F(FrameHeaderTest, decode_callsign)
 
 TEST_F(FrameHeaderTest, decode_callsign_2)
 {
-    mobilinkd::FrameHeader::encoded_call_t encoded = {0x00, 0x00, 0x5F, 0x1B, 0x66, 0x91};
-    auto callsign = mobilinkd::FrameHeader::decode_callsign(encoded);
+    mobilinkd::OPVFrameHeader::encoded_call_t encoded = {0x00, 0x00, 0x5F, 0x1B, 0x66, 0x91};
+    auto callsign = mobilinkd::OPVFrameHeader::decode_callsign(encoded);
     EXPECT_EQ(callsign[0], 'I') << (char*) callsign.data();
     EXPECT_EQ(callsign[1], 'U');
     EXPECT_EQ(callsign[2], '2');

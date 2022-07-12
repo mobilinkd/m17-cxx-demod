@@ -14,31 +14,6 @@
 namespace mobilinkd
 {
 
-inline constexpr std::array<int8_t, 61> make_p1() {
-    std::array<int8_t, 61> result{};
-    for (size_t i = 0, j = 2; i != 61; ++i) {
-        if (i == j) {
-            result[i] = 0;
-            j += 4;
-        } else {
-            result[i] = 1;
-        }
-    }
-    return result;
-};
-
-inline constexpr auto P1 = make_p1();
-
-/// Puncture matrix for audio frames. Rate 6/11.
-inline constexpr auto P2 = std::array<int8_t, 12>{
-    1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 0};
-
-
-/// Puncture matrix for packet frames (7/8).
-inline constexpr auto P3 = std::array<int8_t, 8>{
-    1, 1, 1, 1, 1, 1, 1, 0};
-
 /**
  * Convert an integer value to an array of bits, with the
  * high-bit at index 0.

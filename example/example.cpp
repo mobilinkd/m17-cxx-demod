@@ -1,4 +1,4 @@
-#include <opvcxx/OPVModulator.h>
+#include <opvcxx/OPVDemodulator.h>
 
 int main(int argc, char** argv) {
     return 0;

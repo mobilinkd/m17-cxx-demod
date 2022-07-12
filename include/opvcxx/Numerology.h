@@ -21,7 +21,8 @@ namespace mobilinkd
     const int stream_type2_payload_size = 2 * stream_frame_type1_size;  // Encoding type1 to type2 doubles the size, plus encoder tail
     const int stream_type3_payload_size = stream_type2_payload_size;    // no puncturing in OPUlent Voice
     const int stream_type4_size = encoded_fheader_size + stream_type3_payload_size;
-
+    const int stream_type4_bytes = stream_type4_size / 8;
+    
     const int baseband_frame_symbols = 16 / 2 + stream_type4_size / 2;   // dibits or symbols in sync+payload in a frame
 
     const int bert_frame_total_size = stream_frame_payload_size;
