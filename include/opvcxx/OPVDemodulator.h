@@ -345,7 +345,7 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 		std::copy(tmp, tmp + len, buffer.begin());
 		auto frame_decode_result = decoder(buffer, viterbi_cost);
 
-		cost_count = viterbi_cost > 90 ? cost_count + 1 : 0;	//!!! do these thresholds need adjusting?
+		cost_count = viterbi_cost > 90 ? cost_count + 1 : 0;
 		cost_count = viterbi_cost > 100 ? cost_count + 1 : cost_count;
 		cost_count = viterbi_cost > 110 ? cost_count + 1 : cost_count;
 
