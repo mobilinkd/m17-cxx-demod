@@ -304,14 +304,14 @@ void OPVDemodulator<FloatType>::do_stream_sync()
 		}
 		sync_triggered = stream_sync.triggered(correlator);
 		if (sync_triggered > 0.1)
-	{
-		missing_sync_count = 0;
+		{
+			missing_sync_count = 0;
 			need_clock_update_ = true;
 			update_values(sample_index);
 			demodState = DemodState::FRAME;
 		}
 		else if (++missing_sync_count > baseband_frame_symbols)
-	{
+		{
 			demodState = DemodState::UNLOCKED;
 			missing_sync_count = 0;
 		}
@@ -381,7 +381,7 @@ void OPVDemodulator<FloatType>::operator()(const FloatType input)
 
 	// We need to pump a few ms of data through on startup to initialize
 	// the demodulator.
-	if (initializing) //!!! [[unlikely]]
+	if (initializing) // [[unlikely]]
 	{
 		--initializing;
 		initialize(input);
