@@ -386,6 +386,7 @@ stream_frame_t fill_bert_frame(PRBS& prbs)
         {
             bit = bert_bits[index - bert_frame_prime_size];
         }
+        bert_bits[index] = bit;
         index++;
     }
 
