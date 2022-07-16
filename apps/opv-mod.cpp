@@ -450,14 +450,13 @@ void set_last_frame_bit(fheader_t& fh)
 encoded_fheader_t encode_fheader(fheader_t header)
 {
     encoded_fheader_t bits;
-    size_t byte_index = 0;
     size_t bit_index = 0;
     uint32_t encoded;
 
     // Each Golay code spans 1.5 bytes. For convenience, we process them in pairs.
     // Each pair has a first code taking up all of the first byte and half of the second,
     // and a second code taking up the other half of the second byte and all of the third.
-    for (size_t byte_index = 0; byte_index < fheader_size_bytes / 3; byte_index += 3)
+    for (size_t byte_index = 0; byte_index < fheader_size_bytes; byte_index += 3)
     {
         encoded = Golay24::encode24(header[byte_index] << 4 | ((header[byte_index+1] >> 4) & 0x0F));
         for (size_t i = 0; i < 24; i++)
