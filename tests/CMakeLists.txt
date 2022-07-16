@@ -51,10 +51,6 @@ add_executable (FrameHeaderTest FrameHeaderTest.cpp)
 target_link_libraries(FrameHeaderTest opvcxx GTest::GTest ${PTHREAD})
 gtest_add_tests(FrameHeaderTest "" AUTO)
 
-add_executable (SlidingDFTTest SlidingDFTTest.cpp)
-target_link_libraries(SlidingDFTTest opvcxx GTest::GTest ${PTHREAD})
-gtest_add_tests(SlidingDFTTest "" AUTO)
-
 add_executable (DataCarrierDetectTest DataCarrierDetectTest.cpp)
 target_link_libraries(DataCarrierDetectTest opvcxx GTest::GTest ${PTHREAD})
 gtest_add_tests(DataCarrierDetectTest "" AUTO)

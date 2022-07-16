@@ -10,6 +10,7 @@
 namespace mobilinkd
 {
 
+#if 0
 /**
  * A sliding DFT algorithm.
  * 
@@ -54,6 +55,8 @@ public:
         return result;
     }
 };
+#endif
+
 
 /**
  * A sliding DFT algorithm.
