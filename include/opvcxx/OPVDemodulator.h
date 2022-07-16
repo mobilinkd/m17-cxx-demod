@@ -288,36 +288,36 @@ void OPVDemodulator<FloatType>::do_unlocked()
 
 
 /**
- * Check for a stream sync word.
+ * Check for a stream sync word. We may still be in the preamble.
  */
 template <typename FloatType>
 void OPVDemodulator<FloatType>::do_stream_sync()
 {
-	uint8_t sync_index = stream_sync(correlator);
-	int8_t sync_updated = stream_sync.updated();
-	sync_count += 1;
-	if (sync_updated)   // Stream sync word
+	FloatType sync_triggered = 0.;
+
+	if (correlator.index() == sample_index)
+	{
+		sync_triggered = preamble_sync.triggered(correlator);
+		if (sync_triggered > 0.1)
+		{
+			return;		// Still seeing preamble; keep looking.
+		}
+		sync_triggered = stream_sync.triggered(correlator);
+		if (sync_triggered > 0.1)
 	{
 		missing_sync_count = 0;
-		if (sync_count > 70)	//!!! what is this number?
-		{
-			update_values(sync_index);
+			need_clock_update_ = true;
+			update_values(sample_index);
 			demodState = DemodState::FRAME;
 		}
-		return;
-	}
-	else if (sync_count > 87)	//!!! what is this number?
+		else if (++missing_sync_count > baseband_frame_symbols)
 	{
-		update_values(sync_index);
-		missing_sync_count += 1;
-		if (missing_sync_count < MAX_MISSING_SYNC)
-		{
-			demodState = DemodState::FRAME;
+			demodState = DemodState::UNLOCKED;
+			missing_sync_count = 0;
 		}
 		else
 		{
-			// fputs("\n!SYNC\n", stderr);
-			demodState = DemodState::STREAM_SYNC;	//!!! revisit: do we keep looking or declare unlock?
+			update_values(sample_index);
 		}
 	}
 }
