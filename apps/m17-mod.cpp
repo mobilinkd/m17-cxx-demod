@@ -53,6 +53,7 @@ struct Config
     bool debug = false;
     bool quiet = false;
     bool bitstream = false; // default is baseband audio
+    bool kiss = false;
     bool bert = false; // Bit error rate testing.
     bool invert = false;
     int can = 10;
@@ -83,6 +84,8 @@ struct Config
                 "Linux event code for PTT (default is RADIO).")
             ("bitstream,b", po::bool_switch(&result.bitstream),
                 "output bitstream (default is baseband).")
+            ("kiss,K", po::bool_switch(&result.kiss),
+                "output kiss.")
             ("bert,B", po::bool_switch(&result.bert),
                 "output a bit error rate test stream (default is read audio from STDIN).")
             ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (ignored for bitstream)")
@@ -307,16 +310,14 @@ void output_eot()
     }
 }
 
-lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType type = FrameType::AUDIO)
+lsf_t generate_lsf(const std::string& src, const std::string& dest, const FrameType type = FrameType::AUDIO)
 {
     using namespace mobilinkd;
 
+    CRC16<0x5935, 0xFFFF> crc;
+
     lsf_t result;
     result.fill(0);
-    
-    M17Randomizer<368> randomizer;
-    PolynomialInterleaver<45, 92, 368> interleaver;
-    CRC16<0x5935, 0xFFFF> crc;
 
     std::cerr << "Sending link setup." << std::endl;
 
@@ -352,6 +353,16 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     result[28] = checksum[0];
     result[29] = checksum[1];
 
+    return result;
+}
+
+void send_lsf(lsf_t result)
+{
+    using namespace mobilinkd;
+
+    M17Randomizer<368> randomizer;
+    PolynomialInterleaver<45, 92, 368> interleaver;
+
     std::array<uint8_t, 488> encoded;
     size_t index = 0;
     uint32_t memory = 0;
@@ -381,8 +392,6 @@ lsf_t send_lsf(const std::string& src, const std::string& dest, const FrameType 
     interleaver.interleave(punctured);
     randomizer.randomize(punctured);
     output_frame(LSF_SYNC_WORD, punctured);
-
-    return result;
 }
 
 using lich_segment_t = std::array<uint8_t, 96>;
@@ -404,13 +413,18 @@ codec_frame_t encode(struct CODEC2* codec2, const audio_frame_t& audio)
     return result;
 }
 
-data_frame_t make_data_frame(uint16_t frame_number, const codec_frame_t& payload)
+std::array<uint8_t, 18> generate_data_frame(uint16_t frame_number, const codec_frame_t& payload)
 {
     std::array<uint8_t, 18> data;   // FN, Audio = 2 + 16;
     data[0] = uint8_t((frame_number >> 8) & 0xFF);
     data[1] = uint8_t(frame_number & 0xFF);
     std::copy(payload.begin(), payload.end(), data.begin() + 2);
 
+    return data;
+}
+
+data_frame_t make_data_frame(std::array<uint8_t, 18> data)
+{
     std::array<uint8_t, 296> encoded;
     size_t index = 0;
     uint32_t memory = 0;
@@ -506,7 +520,7 @@ bitstream_t make_bert_frame(PRBS& prbs)
 /**
  * Encode each LSF segment into a Golay-encoded LICH segment bitstream.
  */
-lich_segment_t make_lich_segment(std::array<uint8_t, 5> segment, uint8_t segment_number)
+lich_segment_t make_lich_segment(std::array<uint8_t, 6> segment)
 {
     lich_segment_t result;
     uint16_t tmp;
@@ -536,7 +550,7 @@ lich_segment_t make_lich_segment(std::array<uint8_t, 5> segment, uint8_t segment
         encoded <<= 1;
     }
 
-    tmp = ((segment[4] & 0x0F) << 8) | (segment_number << 5);
+    tmp = ((segment[4] & 0x0F) << 8) | segment[5];
     encoded = mobilinkd::Golay24::encode24(tmp);
     for (size_t i = 72; i != 96; ++i)
     {
@@ -563,18 +577,131 @@ void send_audio_frame(const lich_segment_t& lich, const data_frame_t& data)
     output_frame(STREAM_SYNC_WORD, temp);
 }
 
+std::array<std::array<uint8_t, 6>, 6> generate_lich(const lsf_t& lsf)
+{
+    std::array<std::array<uint8_t, 6>, 6> plain_lich;
+    for (size_t i = 0; i != plain_lich.size(); ++i)
+    {
+        std::copy(lsf.begin() + i * 5, lsf.begin() + (i + 1) * 5, plain_lich[i].begin());
+        plain_lich[i][5] = (i << 5) & 0xFF;
+    }
+    return plain_lich;
+}
+
+std::vector<uint8_t> escape_kiss(std::vector<uint8_t> data)
+{
+    std::vector<uint8_t> result;
+    for (uint8_t d : data)
+    {
+        switch (d)
+        {
+            case 0xC0: // FEND
+                result.push_back(0xDB); // FESC
+                result.push_back(0xDC); // TFEND
+                break;
+            case 0xDB: // FESC
+                result.push_back(0xDB); // FESC
+                result.push_back(0xDD); // TFESC
+                break;
+            default:
+                result.push_back(d);
+        }
+    }
+    return result;
+}
+
+std::array<uint8_t, 24> generate_audio_frame(std::array<uint8_t, 6> lich_segment, std::array<uint8_t, 18UL> data)
+{
+    std::array<uint8_t, 24> result;
+    auto it = std::copy(lich_segment.begin(), lich_segment.end(), result.begin());
+    std::copy(data.begin(), data.end(), it);
+    return result;
+}
+
+std::vector<uint8_t> generate_kiss_frame(std::vector<uint8_t> data)
+{
+    std::vector<uint8_t> kiss_frame;
+    kiss_frame.push_back(0xC0); // FEND
+    kiss_frame.push_back(0x20); // KISS_MODEM_STREAMING
+    for (uint8_t d : escape_kiss(data))
+        kiss_frame.push_back(d);
+    kiss_frame.push_back(0xC0); // FEND
+
+    return kiss_frame;
+}
+
+void send_kiss_data(std::vector<uint8_t> frame)
+{
+    auto kiss_frame = generate_kiss_frame(frame);
+    for (auto c : kiss_frame)
+        std::cout << c;
+}
+
+void send_kiss_audio_data(uint16_t frame_number, codec_frame_t codec_frame, std::array<uint8_t, 6> lich_segment)
+{
+    auto data_frame = generate_data_frame(frame_number, codec_frame);
+    auto audio_frame = generate_audio_frame(lich_segment, data_frame);
+    send_kiss_data(std::vector<uint8_t>(audio_frame.begin(), audio_frame.end()));
+}
+
+void transmit_kiss(queue_t& queue, const lsf_t& lsf)
+{
+    using namespace mobilinkd;
+
+    std::array<std::array<uint8_t, 6>, 6> plain_lich = generate_lich(lsf);
+
+    struct CODEC2* codec2 = ::codec2_create(CODEC2_MODE_3200);
+
+    audio_frame_t audio;
+    size_t index = 0;
+    uint16_t frame_number = 0;
+    uint8_t lich_segment = 0;
+    while(!queue.is_closed() && queue.empty()) std::this_thread::yield();
+    while (!queue.is_closed())
+    {
+        int16_t sample;
+        if (!queue.get(sample, std::chrono::milliseconds(3000))) break;
+        audio[index++] = sample;
+        if (index == audio.size())
+        {
+            index = 0;
+            auto codec_frame = encode(codec2, audio);
+            send_kiss_audio_data(frame_number++, codec_frame, plain_lich[lich_segment++]);
+            if (frame_number == 0x8000) frame_number = 0;
+            if (lich_segment == plain_lich.size()) lich_segment = 0;
+            audio.fill(0);
+        }
+    }
+
+    if (index > 0)
+    {
+        // send partial frame;
+        auto codec_frame = encode(codec2, audio);
+        send_kiss_audio_data(frame_number++, codec_frame, plain_lich[lich_segment++]);
+        if (frame_number == 0x8000) frame_number = 0;
+        if (lich_segment == plain_lich.size()) lich_segment = 0;
+    }
+
+    // Last frame
+    audio.fill(0);
+    auto codec_frame = encode(codec2, audio);
+    send_kiss_audio_data(frame_number++, codec_frame, plain_lich[lich_segment++]);
+}
+
 void transmit(queue_t& queue, const lsf_t& lsf)
 {
     using namespace mobilinkd;
 
     assert(running);
 
+    std::array<std::array<uint8_t, 6>, 6> plain_lich = generate_lich(lsf);
     lich_t lich;
+
     for (size_t i = 0; i != lich.size(); ++i)
     {
-        std::array<uint8_t, 5> segment;
-        std::copy(lsf.begin() + i * 5, lsf.begin() + (i + 1) * 5, segment.begin());
-        auto lich_segment = make_lich_segment(segment, i);
+        std::array<uint8_t, 6> segment;
+        std::copy(plain_lich[i].begin(), plain_lich[i].end(), segment.begin());
+        auto lich_segment = make_lich_segment(segment);
         std::copy(lich_segment.begin(), lich_segment.end(), lich[i].begin());
     }
     
@@ -597,7 +724,9 @@ void transmit(queue_t& queue, const lsf_t& lsf)
         if (index == audio.size())
         {
             index = 0;
-            auto data = make_data_frame(frame_number++, encode(codec2, audio));
+            auto codec_frame = encode(codec2, audio);
+            auto data_frame = generate_data_frame(frame_number++, codec_frame);
+            auto data = make_data_frame(data_frame);
             if (frame_number == 0x8000) frame_number = 0;
             send_audio_frame(lich[lich_segment++], data);
             if (lich_segment == lich.size()) lich_segment = 0;
@@ -608,7 +737,9 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     if (index > 0)
     {
         // send parial frame;
-        auto data = make_data_frame(frame_number++, encode(codec2, audio));
+        auto codec_frame = encode(codec2, audio);
+        auto data_frame = generate_data_frame(frame_number++, codec_frame);
+        auto data = make_data_frame(data_frame);
         if (frame_number == 0x8000) frame_number = 0;
         send_audio_frame(lich[lich_segment++], data);
         if (lich_segment == lich.size()) lich_segment = 0;
@@ -616,7 +747,9 @@ void transmit(queue_t& queue, const lsf_t& lsf)
 
     // Last frame
     audio.fill(0);
-    auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
+    auto codec_frame = encode(codec2, audio);
+    auto data_frame = generate_data_frame(frame_number | 0x8000, codec_frame);
+    auto data = make_data_frame(data_frame);
     send_audio_frame(lich[lich_segment], data);
     output_eot();
 }
@@ -638,14 +771,23 @@ int main(int argc, char* argv[])
 
     signal(SIGINT, &signal_handler);
 
-    send_preamble();
+    if (!config->kiss)
+        send_preamble();
 
     if (!config->bert) {
-        auto lsf = send_lsf(config->source_address, config->destination_address);
+        lsf_t lsf = generate_lsf(config->source_address, config->destination_address);
+        if (!config->kiss)
+            send_lsf(lsf);
+        else
+            send_kiss_data(std::vector<uint8_t>(lsf.begin(), lsf.end()));
 
         running = true;
         queue_t queue;
-        std::thread thd([&queue, &lsf](){transmit(queue, lsf);});
+        std::thread thd;
+        if (!config->kiss)
+            thd = std::thread([&queue, &lsf](){transmit(queue, lsf);});
+        else
+            thd = std::thread([&queue, &lsf](){transmit_kiss(queue, lsf);});
 
         std::cerr << "m17-mod running. ctrl-D to break." << std::endl;
 
