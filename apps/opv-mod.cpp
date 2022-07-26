@@ -466,7 +466,7 @@ encoded_fheader_t encode_fheader(fheader_t header)
             encoded <<= 1;
         }
 
-        encoded = Golay24::encode24((header[byte_index+1] & 0x0F) << 8 | ((header[byte_index+2] >> 4) & 0x0F));
+        encoded = Golay24::encode24((header[byte_index+1] & 0x0F) << 8 | header[byte_index+2]);
         for (size_t i = 0; i < 24; i++)
         {
             bits[bit_index++] = ((encoded & (1 << 23)) != 0);
