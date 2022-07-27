@@ -5,6 +5,7 @@
 #include "Trellis.h"
 #include "Convolution.h"
 #include "Util.h"
+#include "Numerology.h"
 
 #include <array>
 #include <cmath>
@@ -117,7 +118,7 @@ struct Viterbi
     // This is the maximum amount of storage needed for M17.  If used for
     // other modes, this may need to be increased.  This will never overflow
     // because of a static assertion in the decode() function.
-    std::array<std::bitset<NumStates>, 244> history_;
+    std::array<std::bitset<NumStates>, stream_type3_payload_size / 2> history_;   //!!! revise for OPV (crashing) was 244 for M17
 
     Viterbi(Trellis_ trellis)
     : cost_(makeCost<Trellis_, LLR_>(trellis))
