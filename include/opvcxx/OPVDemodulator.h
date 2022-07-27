@@ -134,7 +134,7 @@ struct OPVDemodulator
 	enum class DemodState { UNLOCKED, STREAM_SYNC, FRAME };
 
 	BaseFirFilter<FloatType, detail::Taps<FloatType>::rrc_taps.size()> demod_filter{detail::Taps<FloatType>::rrc_taps};
-	DataCarrierDetect<FloatType, sample_rate, 500> dcd{2500, 4000, 1.0, 4.0};	//!!! need to revise these values
+	DataCarrierDetect<FloatType, sample_rate, 500> dcd{10000, 15500, 1.0, 4.0};	//!!! may need to revise these values
 	ClockRecovery<FloatType, sample_rate, symbol_rate> clock_recovery;
 
 	correlator_t correlator;
