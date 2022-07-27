@@ -365,6 +365,7 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 			demodState = DemodState::STREAM_SYNC;
 			break;
 		case OPVFrameDecoder::DecodeResult::OK:
+			demodState = DemodState::STREAM_SYNC;	// Expect a new STREAM sync word next
 			break;
 		}
 	}
