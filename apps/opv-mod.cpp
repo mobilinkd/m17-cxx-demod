@@ -250,15 +250,11 @@ void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 }
 
 
-// create and ouput a preamble frame to cout in the desired format
-void send_preamble()
+// create and output a frame with a constant byte value (preamble or dead carrier)
+void send_constant_frame(const uint8_t value)
 {
-    // Preamble is simple... bytes -> symbols -> baseband.
-
-    if (config->verbose) std::cerr << "Sending preamble: " << stream_type4_size + 16 << " bits." << std::endl;
-
     std::array<uint8_t, (stream_type4_size + 16)/8> preamble_bytes;
-    preamble_bytes.fill(0x77);  // +3, -3, +3, -3 == 01 11 01 11 == 0x77
+    preamble_bytes.fill(value);
     if (config->bitstream)
     {
         for (auto c : preamble_bytes) std::cout << c;
@@ -269,7 +265,29 @@ void send_preamble()
         auto preamble_baseband = symbols_to_baseband(preamble_symbols);
         for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
     }
+
 }
+
+
+// create and output a preamble frame to cout
+void send_preamble()
+{
+    if (config->verbose) std::cerr << "Sending preamble: " << stream_type4_size + 16 << " bits." << std::endl;
+
+    send_constant_frame(0x77);  // +3, -3, +3, -3 == 01 11 01 11 == 0x77
+}
+
+
+// create and output a frame of dead carrier to cout
+// (We'd like to send silence instead, but can't do that when we're outputting
+// frequency modulation values and not magnitudes.)
+void send_dead_carrier()
+{
+    if (config->verbose) std::cerr << "Sending dead carrier: " << stream_type4_size + 16 << " bits." << std::endl;
+
+    send_constant_frame(0);     // +1, +1, +1, +1 = 00 00 00 00 == 0x00
+}
+
 
 constexpr std::array<uint8_t, 2> STREAM_SYNC_WORD = {0xFF, 0x5D};
 constexpr std::array<uint8_t, 2> EOT_SYNC = { 0x55, 0x5D };
@@ -585,7 +603,7 @@ int main(int argc, char* argv[])
     invert = config->invert;
 
     OPVFrameHeader::token_t access_token;
-    std::cerr << "Access token: " << std::hex << std::setw(6) << config->token << std::dec << std::endl;
+    std::cerr << "Access token: 0x" << std::hex << std::setw(6) << config->token << std::dec << std::endl;
     access_token[0] = (config->token & 0xff0000) >> 16;
     access_token[1] = (config->token & 0x00ff00) >> 8;
     access_token[2] = (config->token & 0x0000ff);
@@ -593,8 +611,25 @@ int main(int argc, char* argv[])
     auto fh = fill_fheader(config->source_address, access_token, config->bert != 0);
     auto encoded_fh = encode_fheader(fh);
 
+    //!!! debug
+    dump_fheader(fh);
+    std::cerr << "Encoded: "
+            << std::hex     // output numbers in hex
+            << std::setfill('0');   // fill with 0s
+
+    for (auto hbyte: encoded_fh)
+    {
+        std::cerr << std::setw(2) << int(hbyte) << " ";
+    }
+
+    std::cerr << std::endl << std::dec;
+
+
+    
     signal(SIGINT, &signal_handler);
 
+    send_dead_carrier();    // in simulation, this coincides with the "initialization" period of the demod
+    send_dead_carrier();    // in simulation, this provides some space before the preamble starts
     send_preamble();
 
     if (!config->bert) {
@@ -652,6 +687,8 @@ int main(int argc, char* argv[])
         }
 
         std::cerr << "Output " << frame_count << " frames of BERT data." << std::endl;
+
+        send_dead_carrier();    // simulate loss of signal
     }
 
     return EXIT_SUCCESS;
