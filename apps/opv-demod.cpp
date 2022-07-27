@@ -28,6 +28,8 @@ bool quiet = false;
 bool debug = false;
 bool noise_blanker = false;
 
+uint32_t debug_sample_count = 0;
+
 OpusDecoder* opus_decoder;
 
 PRBS9 prbs;
@@ -178,14 +180,15 @@ void diagnostic_callback(bool dcd, FloatType evm, FloatType deviation, FloatType
     FloatType clock, int sample_index, int sync_index, int clock_index, int viterbi_cost)
 {
     if (debug) {
-        std::cerr << "\rdcd: " << std::setw(1) << int(dcd)
+        std::cerr << "\ndcd: " << std::setw(1) << int(dcd)
             << ", evm: " << std::setfill(' ') << std::setprecision(4) << std::setw(8) << evm * 100 <<"%"
             << ", deviation: " << std::setprecision(4) << std::setw(8) << deviation
             << ", freq offset: " << std::setprecision(4) << std::setw(8) << offset
             << ", locked: " << std::boolalpha << std::setw(6) << locked << std::dec
             << ", clock: " << std::setprecision(7) << std::setw(8) << clock
             << ", sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
-            << ", cost: " << viterbi_cost;
+            << ", cost: " << viterbi_cost
+            << " at sample " << debug_sample_count;
     }
         
     if (!dcd && prbs.sync()) { // Seems like there should be a better way to do this.
@@ -233,6 +236,7 @@ int main(int argc, char* argv[])
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
         if (invert_input) sample *= -1;
         demod(sample / 44000.0);
+        debug_sample_count++;
     }
 
     std::cerr << std::endl;

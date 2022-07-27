@@ -224,6 +224,7 @@ void OPVDemodulator<FloatType>::dcd_off()
 	// Just lost data carrier.
 	dcd_ = false;
 	demodState = DemodState::UNLOCKED;
+	std::cerr << "DCD lost at sample " << debug_sample_count << std::endl;	//!!! debug
 }
 
 template <typename FloatType>
@@ -260,6 +261,7 @@ void OPVDemodulator<FloatType>::do_unlocked()
 		auto sync_updated = preamble_sync.updated();
 		if (sync_updated)
 		{
+			std::cerr << "\nDetected preamble at sample " << debug_sample_count << std::endl;	//!!! debug
 			sync_count = 0;
 			missing_sync_count = 0;
 			need_clock_reset_ = true;
@@ -275,6 +277,8 @@ void OPVDemodulator<FloatType>::do_unlocked()
 	auto sync_updated = stream_sync.updated();
 	if (sync_updated)
 	{
+		std::cerr << "Stream sync detected while unlocked at sample " << debug_sample_count << std::endl; //!!! debug
+
 		sync_count = 0;
 		missing_sync_count = 0;
 		need_clock_reset_ = true;
@@ -300,11 +304,13 @@ void OPVDemodulator<FloatType>::do_stream_sync()
 		sync_triggered = preamble_sync.triggered(correlator);
 		if (sync_triggered > 0.1)
 		{
+//			std::cerr << "Still seeing preamble at sample " << debug_sample_count << std::endl;	//!!! debug
 			return;		// Still seeing preamble; keep looking.
 		}
 		sync_triggered = stream_sync.triggered(correlator);
 		if (sync_triggered > 0.1)
 		{
+			std::cerr << "\nDetected STREAM sync word at sample " << debug_sample_count << std::endl; //!!! debug
 			missing_sync_count = 0;
 			need_clock_update_ = true;
 			update_values(sample_index);
@@ -312,11 +318,14 @@ void OPVDemodulator<FloatType>::do_stream_sync()
 		}
 		else if (++missing_sync_count > baseband_frame_symbols)
 		{
+			std::cerr << "Too many missed sync counts at sample " << debug_sample_count << std::endl;	//!! debug
 			demodState = DemodState::UNLOCKED;
 			missing_sync_count = 0;
 		}
 		else
 		{
+//			std::cerr << "No action in do_stream_sync at sample " << debug_sample_count << std::endl;	//!! debug
+
 			update_values(sample_index);
 		}
 	}
@@ -326,6 +335,8 @@ void OPVDemodulator<FloatType>::do_stream_sync()
 template <typename FloatType>
 void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 {
+//	std::cerr << "do_frame called at sample " << debug_sample_count << std::endl;
+
 	if (correlator.index() != sample_index) return;
 
 	static uint8_t cost_count = 0;
@@ -339,6 +350,8 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 	auto len = framer(n, &tmp);
 	if (len != 0)
 	{
+//		std::cerr << "Framer returned " << len << " at sample " << debug_sample_count << std::endl;
+
 		need_clock_update_ = true;
 
 		OPVFrameDecoder::frame_type4_buffer_t buffer;
@@ -351,6 +364,7 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 
 		if (cost_count > 75)
 		{
+			std::cerr << "Viterbi cost too high at sample " << debug_sample_count << std::endl;	//!!! debug
 			cost_count = 0;
 			demodState = DemodState::UNLOCKED;
 			// fputs("\nCOST\n", stderr);
@@ -362,6 +376,7 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 		switch (frame_decode_result)
 		{
 		case OPVFrameDecoder::DecodeResult::EOS:
+			std::cerr << "EOS, going back to STREAM_SYNC state at sample " << debug_sample_count << std::endl;	//!!! debug
 			demodState = DemodState::STREAM_SYNC;
 			break;
 		case OPVFrameDecoder::DecodeResult::OK:
@@ -375,6 +390,9 @@ template <typename FloatType>
 void OPVDemodulator<FloatType>::operator()(const FloatType input)
 {
 	static int16_t initializing = samples_per_frame;
+	static bool initialized = false; //!!! debug
+
+	// std::cerr << "Sample " << debug_sample_count << ": " << input << std::endl;	//!!! debug
 
 	count_++;
 
@@ -389,7 +407,10 @@ void OPVDemodulator<FloatType>::operator()(const FloatType input)
 		count_ = 0;
 		return;
 	}
- 
+
+	if (! initialized) std::cerr << "Initialize complete at sample " << debug_sample_count << std::endl;	//!!! debug
+	initialized = true;//!!! debug
+
 	if (!dcd_)
 	{
 		if (count_ % (baseband_frame_symbols * 2) == 0)

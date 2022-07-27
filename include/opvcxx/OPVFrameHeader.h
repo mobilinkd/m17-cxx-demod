@@ -5,6 +5,7 @@
 
 #include "Golay24.h"
 #include "Numerology.h"
+#include "Util.h"
 
 #include <array>
 #include <cstdint>
@@ -12,6 +13,8 @@
 #include <stdexcept>
 #include <algorithm>
 #include <iostream>
+
+extern uint32_t debug_sample_count;
 
 namespace mobilinkd
 {
@@ -127,29 +130,73 @@ struct OPVFrameHeader
 
     // Initialize/update the frame header info from a received frame header.
     // Any failure to decode a Golay24 codeword will abort this procedure.  !!! this could be smarter
-    HeaderResult update_frame_header(encoded_fheader_t efh)
+    HeaderResult update_frame_header(encoded_fheader_t efh_soft_bits)
     {
         uint32_t received, decoded;
         raw_fheader_t raw_fh;
         std::array<uint8_t, fheader_size_bytes * 2> nibbles;
         encoded_call_t  call;
         HeaderResult result = HeaderResult::NOCHANGE;
+        encoded_fheader_t efh_hard_bits;
+
+        for (size_t i = 0; i < encoded_fheader_size; i++)
+        {
+            efh_hard_bits[i] = (efh_soft_bits[i] > 0);
+        }
+        auto efh = to_byte_array(efh_hard_bits);
+
+        std::cerr << "\nGolay decoding a frame at sample " << debug_sample_count << std::endl; //!!! debug
+
+#if 0        //!!! debug
+        std::cerr << "Encoded fheader as soft bits: ";
+        for (auto b:efh_soft_bits)
+        {
+            std::cerr << +b << " ";
+        }
+        std::cerr << std::endl;
+        std::cerr << "Encoded fheader as bits: ";
+        for (auto b:efh_hard_bits)
+        {
+            std::cerr << +b << " ";
+        }
+        std::cerr << std::endl;
+
+        std::cerr << "Encoded fheader: " << std::hex;
+        for (size_t i = 0; i < fheader_size_bytes * 2; i++)
+        {
+            std::cerr << int(efh[i]&0xff) << " ";
+        }
+        std::cerr << std::dec << std::endl;
+#endif
 
         // For convenience, we'll decode into an array of nibbles (4 bits each)
         // initially and then group them up into bytes afterwards.
         for (size_t i = 0; i < fheader_size_bytes * 2; i += 3)
         {
             received = ((efh[i+0] << 16) & 0xff0000) | ((efh[i+1] << 8) & 0x00ff00) | (efh[i+2] & 0x0000ff);
-            if (! Golay24::decode(received, decoded)) return HeaderResult::FAIL;
-            nibbles[i+0] = (decoded >> 8) & 0x0f;
-            nibbles[i+1] = (decoded >> 4) & 0x0f;
-            nibbles[i+2] = (decoded >> 0) & 0x0f;
+            if (! Golay24::decode(received, decoded))
+            {
+                std::cerr << "Golay decode fail, input " << std::hex << received << std::dec << " at sample " << debug_sample_count << std::endl; //!!! debug
+                return HeaderResult::FAIL;
+            }
+//            std::cerr << "Golay " << std::hex << received << " decoded to " << decoded << std::dec << std::endl;    //!!! debug
+            nibbles[i+0] = (decoded >> 20) & 0x0f;
+            nibbles[i+1] = (decoded >> 16) & 0x0f;
+            nibbles[i+2] = (decoded >> 12) & 0x0f;
         }
 
         for (size_t i = 0; i < fheader_size_bytes; i++)
         {
-            raw_fh[i] = nibbles[2*i] << 4 + nibbles[2*i + 1];
+            raw_fh[i] = (nibbles[2*i] << 4) + nibbles[2*i + 1];
         }
+
+        //!!! debug
+        std::cerr << "Raw decoded fheader: " << std::hex;
+        for (size_t i = 0; i < fheader_size_bytes; i++)
+        {
+            std::cerr << int(raw_fh[i]&0xff) << " ";
+        }
+        std::cerr << std::dec << std::endl;
 
         // If the callsign (after Golay decoding but before callsign decoding) has changed,
         // decode and store the updated callsign
@@ -160,28 +207,35 @@ struct OPVFrameHeader
             callsign = decode_callsign(call);
             std::cerr << "Callsign: ";
             for (auto x : callsign) if (x) std::cerr << x;
+            std::cerr << " ";
         }
 
         // If the decoded flags have changed, store them
-        if (! std::equal(raw_fh.begin() + 12, raw_fh.begin() + 18, raw_fheader_.begin() + 12))
+        if (! std::equal(raw_fh.begin() + 6, raw_fh.begin() + 9, raw_fheader_.begin() + 6))
         {
             result = HeaderResult::UPDATED;
             flags = ((raw_fh[6] << 16) & 0xff0000) | ((raw_fh[7] << 8) & 0x00ff00) | (raw_fh[8] & 0x0000ff);
             std::cerr << "Flags: " << std::hex << flags << std::dec;
+            std::cerr << " ";
         }
 
         // If the decoded authentication token has changed, store it
-        if (! std::equal(raw_fh.begin() + 18, raw_fh.end(), raw_fheader_.begin() + 18))
+        if (! std::equal(raw_fh.begin() + 9, raw_fh.end(), raw_fheader_.begin() + 9))
         {
             result = HeaderResult::UPDATED;
             std::copy(raw_fh.begin() + 9, raw_fh.end(), token.begin());
-            std::cerr << "Token: " << std::hex << token[0] << token[1] << token[2] << std::dec;
+            std::cerr << "Token: " << std::hex << +token[0] << +token[1] << +token[2] << std::dec;
         }
 
         if (result == HeaderResult::UPDATED)
         {
             std::cerr << std::endl;
             std::copy(raw_fh.begin(), raw_fh.end(), raw_fheader_.begin());
+            std::cerr << "Frame header updated" << std::endl;
+        }
+        else
+        {
+            std::cerr << "Frame header decoded, no changes" << std::endl;
         }
 
         return result;
