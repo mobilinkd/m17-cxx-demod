@@ -135,11 +135,18 @@ bool demodulate_audio(OPVFrameDecoder::stream_type1_bytes_t const& audio, int vi
 
 bool decode_bert(OPVFrameDecoder::stream_type1_bytes_t const& bert_data)
 {
+    size_t count = 0;
+
     for (auto b: bert_data)
     {
         for (int i = 0; i != 8; ++i) {
             prbs.validate(b & 0x80);
             b <<= 1;
+            count++;
+            if (count >= bert_frame_prime_size)
+            {
+                return true;    // ignore any extra/repeated bits at the end of the frame
+            }
         }
     }
 
