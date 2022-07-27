@@ -1,4 +1,5 @@
 #include "OPVFramer.h"
+#include "Numerology.h"
 
 #include <gtest/gtest.h>
 
@@ -20,5 +21,5 @@ class OPVFramerTest : public ::testing::Test {
 
 TEST_F(OPVFramerTest, construct)
 {
-    mobilinkd::OPVFramer framer;
+    mobilinkd::OPVFramer<mobilinkd::stream_type4_size> framer;
 }

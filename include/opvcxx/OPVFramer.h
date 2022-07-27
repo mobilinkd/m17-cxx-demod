@@ -10,7 +10,7 @@
 namespace mobilinkd
 {
 
-template <size_t N = 368>
+template <size_t N> // N = bits in a frame, not including sync word
 struct OPVFramer
 {
     using buffer_t = std::array<int8_t, N>;
