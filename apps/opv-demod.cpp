@@ -103,32 +103,77 @@ std::optional<Config> config;
 bool demodulate_audio(OPVFrameDecoder::stream_type1_bytes_t const& audio, int viterbi_cost)
 {
     bool result = true;
-    std::array<int16_t, audio_frame_size> buf;
+    std::array<int16_t, audio_samples_per_opus_frame> buf;
     opus_int32 count;
 
     if (noise_blanker && viterbi_cost > 80)
     {
+        if (config->verbose)
+        {
+            std::cerr << "Frameout blanked" << std::endl;
+        }
+
         buf.fill(0);
-        std::cout.write((const char*)buf.data(), audio_frame_sample_bytes);
-        std::cout.write((const char*)buf.data(), audio_frame_sample_bytes);
+        std::cout.write((const char*)buf.data(), audio_bytes_per_opus_frame);
+        std::cout.write((const char*)buf.data(), audio_bytes_per_opus_frame);
+    }
+    else if (viterbi_cost > 80)
+    {
+        if (config->verbose)
+        {
+            std::cerr << "Frameout nulled" << std::endl;
+        }
+
+        count = opus_decode(opus_decoder, NULL, opus_frame_size_bytes, buf.data(), audio_samples_per_opus_frame, 0);
+        if (count != audio_samples_per_opus_frame && config->verbose)
+        {
+            std::cerr << "Opus decode error, " << count << " samples, expected " << audio_samples_per_opus_frame << std::endl;
+        }
+        else if (config->verbose)
+        {
+            std::cerr << "Opus decode OK, " << count << " samples" << std::endl;
+        }
+        std::cout.write((const char*)buf.data(), audio_bytes_per_opus_frame);
+
+       count = opus_decode(opus_decoder, NULL, opus_frame_size_bytes, buf.data(), audio_samples_per_opus_frame, 0);
+        if (count != audio_samples_per_opus_frame && config->verbose)
+        {
+            std::cerr << "Opus decode error, " << count << " samples, expected " << audio_samples_per_opus_frame << std::endl;
+        }
+        else if (config->verbose)
+        {
+            std::cerr << "Opus decode OK, " << count << " samples" << std::endl;
+        }
+        std::cout.write((const char*)buf.data(), audio_bytes_per_opus_frame);
     }
     else
     {
-        bool use_fec = (viterbi_cost > 80); // instead of blanking, use Opus's in-band FEC data if possible
-
-        count = opus_decode(opus_decoder, audio.data(), stream_frame_payload_bytes, buf.data(), audio_frame_size, use_fec);
-        if (count != audio_frame_size && config->verbose)
+        if (config->verbose)
         {
-            std::cerr << "Opus decode error, " << count << " bytes, expected " << audio_frame_size << std::endl;
+            std::cerr << "Frameout normal" << std::endl;
         }
-        std::cout.write((const char*)buf.data(), audio_frame_sample_bytes);
 
-       count = opus_decode(opus_decoder, audio.data() + audio_frame_size, stream_frame_payload_bytes, buf.data(), audio_frame_size, use_fec);
-        if (count != audio_frame_size && config->verbose)
+        count = opus_decode(opus_decoder, audio.data(), opus_frame_size_bytes, buf.data(), audio_samples_per_opus_frame, 0);
+        if (count != audio_samples_per_opus_frame && config->verbose)
         {
-            std::cerr << "Opus decode error, " << count << " bytes, expected " << audio_frame_size << std::endl;
+            std::cerr << "Opus decode error, " << count << " samples, expected " << audio_samples_per_opus_frame << std::endl;
         }
-        std::cout.write((const char*)buf.data(), audio_frame_sample_bytes);
+        else if (config->verbose)
+        {
+            std::cerr << "Opus decode OK, " << count << " samples" << std::endl;
+        }
+        std::cout.write((const char*)buf.data(), audio_bytes_per_opus_frame);
+
+       count = opus_decode(opus_decoder, audio.data() + opus_frame_size_bytes, opus_frame_size_bytes, buf.data(), audio_samples_per_opus_frame, 0);
+        if (count != audio_samples_per_opus_frame && config->verbose)
+        {
+            std::cerr << "Opus decode error, " << count << " samples, expected " << audio_samples_per_opus_frame << std::endl;
+        }
+        else if (config->verbose)
+        {
+            std::cerr << "Opus decode OK, " << count << " samples" << std::endl;
+        }
+        std::cout.write((const char*)buf.data(), audio_bytes_per_opus_frame);
     }
 
     return result;
@@ -213,7 +258,7 @@ void diagnostic_callback(bool dcd, FloatType evm, FloatType deviation, FloatType
 
 int main(int argc, char* argv[])
 {
-    auto config = Config::parse(argc, argv);
+    config = Config::parse(argc, argv);
     if (!config) return 0;
 
     invert_input = config->invert;

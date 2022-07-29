@@ -320,8 +320,8 @@ void output_eot()
 using fheader_t = std::array<uint8_t, fheader_size_bytes>;          // Frame Header (type 1)
 using encoded_fheader_t = std::array<int8_t, encoded_fheader_size>; // Frame Header (type 2/3)
 
-using queue_t = queue<int16_t, audio_frame_size>; // the queue can hold up to 40ms worth of PCM audio samples
-using audio_frame_t = std::array<int16_t, audio_frame_size>;    // an audio frame is 40ms worth of PCM audio samples
+using queue_t = queue<int16_t, audio_samples_per_opv_frame>; // the queue can hold up to 40ms worth of PCM audio samples
+using audio_frame_t = std::array<int16_t, audio_samples_per_opv_frame>;    // an audio frame is 40ms worth of PCM audio samples
 using stream_frame_t = std::array<uint8_t, stream_frame_payload_bytes>; // a stream frame of type1 data bytes
 using type3_data_frame_t = std::array<uint8_t, stream_type3_payload_size>;  // a stream frame of type3 bits
 
@@ -334,10 +334,10 @@ stream_frame_t fill_voice_frame(OpusEncoder *opus_encoder, const audio_frame_t& 
     opus_int32 count;
 
     count  = opus_encode(opus_encoder,
-                        const_cast<int16_t*>(&audio[0]), audio_frame_size,
+                        const_cast<int16_t*>(&audio[0]), audio_samples_per_opus_frame,
                         &result[0], opus_frame_size_bytes);
     count += opus_encode(opus_encoder,
-                        const_cast<int16_t*>(&audio[audio_frame_size]), audio_frame_size,
+                        const_cast<int16_t*>(&audio[audio_samples_per_opus_frame]), audio_samples_per_opus_frame,
                         &result[opus_frame_size_bytes], opus_frame_size_bytes);
 
     if (count != stream_frame_payload_bytes)
