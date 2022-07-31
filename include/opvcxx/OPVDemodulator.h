@@ -125,21 +125,36 @@ struct OPVDemodulator
 {
 
 	static constexpr uint8_t MAX_MISSING_SYNC = 8;
+	static constexpr FloatType CORRELATION_NEAR_ZERO = 0.1;		// just to avoid a floating point compare to 0.0
 
 	using correlator_t = Correlator<FloatType>;
 	using sync_word_t = SyncWord<correlator_t>;
 	using callback_t = OPVFrameDecoder::callback_t;
 	using diagnostic_callback_t = std::function<void(bool, FloatType, FloatType, FloatType, bool, FloatType, int, int, int, int)>;
 
-	enum class DemodState { UNLOCKED, STREAM_SYNC, FRAME };
+	// In the UNLOCKED state we are expecting to lock onto symbol timing and find a preamble.
+	// In the FIRST_SYNC state we are expecting to find a STREAM syncword, but we don't know when.
+	// In the STREAM_SYNC state we are expecting to find a STREAM syncword in a small window
+	// (specifically, about one frame time after the last one).
+	// In the FRAME state we've just passed a syncword window and will process the frame payload.
+	// If everything goes perfectly, the normal sequence is:
+	// UNLOCKED (some number of times, until preamble detection)
+	// FIRST_SYNC (some number of times, until STREAM syncword is detected)
+	// FRAME
+	// STREAM_SYNC
+	// FRAME
+	// STREAM_SYNC
+	// FRAME
+	// ...
+	enum class DemodState { UNLOCKED, FIRST_SYNC, STREAM_SYNC, FRAME };
 
 	BaseFirFilter<FloatType, detail::Taps<FloatType>::rrc_taps.size()> demod_filter{detail::Taps<FloatType>::rrc_taps};
 	DataCarrierDetect<FloatType, sample_rate, 500> dcd{10000, 15500, 1.0, 4.0};	//!!! may need to revise these values
 	ClockRecovery<FloatType, sample_rate, symbol_rate> clock_recovery;
 
 	correlator_t correlator;
-	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};
-	sync_word_t stream_sync{{-3,-3,-3,-3,+3,+3,-3,+3}, 32.f, -31.f};
+	sync_word_t preamble_sync{{+3,-3,+3,-3,+3,-3,+3,-3}, 29.f};		// accept only positive correlation
+	sync_word_t stream_sync{{-3,-3,-3,-3,+3,+3,-3,+3}, 32.f};		// accept only positive correlation
 
 	FreqDevEstimator<FloatType> dev;
 	FloatType idev;
@@ -173,6 +188,7 @@ struct OPVDemodulator
 	void initialize(const FloatType input);
 	void update_dcd();
 	void do_unlocked();
+	void do_first_sync();
 	void do_stream_sync();
 	void do_frame(FloatType filtered_sample);
 
@@ -268,11 +284,12 @@ void OPVDemodulator<FloatType>::do_unlocked()
 			dev.reset();
 			update_values(sync_index);
 			sample_index = sync_index;
-			demodState = DemodState::STREAM_SYNC;	// now looking for a stream sync word
+			demodState = DemodState::FIRST_SYNC;	// now looking for a stream sync word
 		}
 		return;
 	}
 
+	// We didn't find preamble; check for the STREAM syncword in case we're joining in the middle
 	auto sync_index = stream_sync(correlator);
 	auto sync_updated = stream_sync.updated();
 	if (sync_updated)
@@ -291,71 +308,143 @@ void OPVDemodulator<FloatType>::do_unlocked()
 }
 
 
-/**
- * Check for a stream sync word. We may still be in the preamble.
- */
+// Search for the first STREAM syncword. We have symbol timing but not frame timing.
+// We may still be in the preamble; this is normal at the start of a transmission.
+// If we joined mid-transmission, any preamble detections will be false hits, which
+// aren't very common but are not especially unusual. Either way, we will keep
+// looking until we've matched the syncword (success), or until we've seen a frame worth of
+// symbols that match neither preamble nor the STREAM syncword (fail back to UNLOCKED).
 template <typename FloatType>
-void OPVDemodulator<FloatType>::do_stream_sync()
+void OPVDemodulator<FloatType>::do_first_sync()
 {
-	FloatType sync_triggered = 0.;
+	FloatType sync_triggered;	//!!! no need to initialize = 0.;
 
-	if (correlator.index() == sample_index)
+	if (correlator.index() != sample_index) return;	// We already have symbol timing, we can skip non-peak samples.
+
+	std::cerr << "FIRST sample " << debug_sample_count << std::endl;	//!!! debug
+
+	// We'll check for preamble first. The order doesn't really matter, since the chances
+	// of matching both preamble and the STREAM syncword are zero.
+	sync_triggered = preamble_sync.triggered(correlator);
+	if (sync_triggered > CORRELATION_NEAR_ZERO)
 	{
-		sync_triggered = preamble_sync.triggered(correlator);
-		if (sync_triggered > 0.1)
+		std::cerr << "Seeing preamble at sample " << debug_sample_count << std::endl;	//!!! debug
+		return;		// Seeing preamble; keep looking. Don't count this as a sync miss.
+	}
+
+	// Now check for the STREAM syncword.
+	sync_triggered = stream_sync.triggered(correlator);
+	if (sync_triggered > CORRELATION_NEAR_ZERO)
+	{
+		// Found the STREAM syncword. Now we have frame timing and can process frames.
+		std::cerr << "\nDetected first STREAM sync word at sample " << debug_sample_count << std::endl; //!!! debug
+		missing_sync_count = 0;
+		need_clock_update_ = true;
+		update_values(sample_index);
+		demodState = DemodState::FRAME;
+	}
+	else
+	{
+		// Didn't find preamble or STREAM syncword; count these and check if we've had too many.
+		// Normally there should be only one frame of preamble, and a syncword every frame thereafter,
+		// so if we go a frame (or so) without seeing the syncword, we've failed.
+		// Even if we had accurate timing when we entered this state, timing may have drifted off, so
+		// we declare failure as soon as we can.
+		//!!! It might be better to keep a symbol timing tracking loop running all the time.
+		if (++missing_sync_count > baseband_frame_symbols)
 		{
-//			std::cerr << "Still seeing preamble at sample " << debug_sample_count << std::endl;	//!!! debug
-			return;		// Still seeing preamble; keep looking.
-		}
-		sync_triggered = stream_sync.triggered(correlator);
-		if (sync_triggered > 0.1)
-		{
-			std::cerr << "\nDetected STREAM sync word at sample " << debug_sample_count << std::endl; //!!! debug
-			missing_sync_count = 0;
-			need_clock_update_ = true;
-			update_values(sample_index);
-			demodState = DemodState::FRAME;
-		}
-		else if (++missing_sync_count > baseband_frame_symbols)
-		{
-			std::cerr << "Too many missed sync counts at sample " << debug_sample_count << std::endl;	//!! debug
+			std::cerr << "FAILED to find first syncword by sample " << debug_sample_count << std::endl;	//!! debug
 			demodState = DemodState::UNLOCKED;
 			missing_sync_count = 0;
 		}
 		else
 		{
-//			std::cerr << "No action in do_stream_sync at sample " << debug_sample_count << std::endl;	//!! debug
-
+			// We haven't found the syncword yet, but we're still looking.
+			// Just keep the deviation tracker fed. Timing doesn't change.
 			update_values(sample_index);
 		}
 	}
 }
 
 
+// Search for a STREAM sync word after the first one. In this case we have both
+// symbol timing and frame timing. We expect to see the STREAM sync word in the
+// nominal location, exactly one frame time after the previous one. If we detect
+// the STREAM sync word, we use it to refresh our timing synchronization.
+// If we don't detect the STREAM sync word, that's OK for a while. We just go on
+// as if we had. But if that happens too many times, we assume that we've lost
+// synchronization with the signal.
+//!!! It's possible we could do something smarter, maybe trust the Golay codes
+//!!! in the fheader to validate a longer freewheeling period. Or maybe it'd
+//!!! just be better to have a live symbol tracking loop.
+template <typename FloatType>
+void OPVDemodulator<FloatType>::do_stream_sync()
+{
+	uint8_t sync_index = stream_sync(correlator);
+	int8_t sync_updated = stream_sync.updated();
+	sync_count += 1;
+	if (sync_updated)
+	{
+		missing_sync_count = 0;
+		if (sync_count > 70)	// sample 71 is the first that's nominally in the last symbol of the sync word
+		{
+			std::cerr << "\nDetected STREAM sync word at sample " << debug_sample_count << std::endl; //!!! debug
+			update_values(sync_index);
+			demodState = DemodState::FRAME;
+		}
+		return;
+	}
+	else if (sync_count > 87)	// sample 87 is the latest we'll accept a sync word detection as matching
+	{
+		update_values(sync_index);
+		missing_sync_count += 1;
+		if (missing_sync_count < MAX_MISSING_SYNC)
+		{
+			std::cerr << "\nFaking a STREAM sync word " << missing_sync_count << " at sample " << debug_sample_count << std::endl; //!!! debug
+			demodState = DemodState::FRAME;
+		}
+		else
+		{
+			std::cerr << "\nDone faking sync words at sample " << debug_sample_count << std::endl;	//!! debug
+			// fputs("\n!SYNC\n", stderr);
+			demodState = DemodState::FIRST_SYNC;
+		}
+	}
+}
+
+
+// Process a frame.
+// We have frame timing, thanks to the STREAM syncword. Either we just detected one, or else
+// we are freewheeling based on an older (but still recent) syncword detection.
 template <typename FloatType>
 void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 {
-//	std::cerr << "do_frame called at sample " << debug_sample_count << std::endl;
-
-	if (correlator.index() != sample_index) return;
+	if (correlator.index() != sample_index) return;	// we have symbol timing; no need to process non-peak samples
 
 	static uint8_t cost_count = 0;
 
+	// Correct the input sample (representing an input symbol) for estimated deviation magnitude, offset, and polarity.
 	auto sample = filtered_sample - dev.offset();
 	sample *= dev.idev();
 	sample *= polarity;
 
-	auto n = llr<FloatType, 4>(sample);
-	int8_t* tmp;
-	auto len = framer(n, &tmp);
+	// Convert the corrected symbol (FloatType) into its LLR representation.
+	auto llr_symbol = llr<FloatType, 4>(sample);
+
+	// Feed these LLR symbols into the OPVFramer. It will gather them up into a frame buffer,
+	// converting from symbols to bits, and returning nonzero (the frame length in bits) only
+	// when the buffer is full.
+	int8_t* framer_buffer_ptr;
+	auto len = framer(llr_symbol, &framer_buffer_ptr);
 	if (len != 0)
 	{
 //		std::cerr << "Framer returned " << len << " at sample " << debug_sample_count << std::endl;
+		assert(len == stream_type4_size);
 
 		need_clock_update_ = true;
 
 		OPVFrameDecoder::frame_type4_buffer_t buffer;
-		std::copy(tmp, tmp + len, buffer.begin());
+		std::copy(framer_buffer_ptr, framer_buffer_ptr + len, buffer.begin());
 		auto frame_decode_result = decoder(buffer, viterbi_cost);
 
 		cost_count = viterbi_cost > 90 ? cost_count + 1 : 0;
@@ -364,7 +453,7 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 
 		if (cost_count > 75)
 		{
-			std::cerr << "Viterbi cost too high at sample " << debug_sample_count << std::endl;	//!!! debug
+			std::cerr << "Viterbi cost high too long at sample " << debug_sample_count << std::endl;	//!!! debug
 			cost_count = 0;
 			demodState = DemodState::UNLOCKED;
 			// fputs("\nCOST\n", stderr);
@@ -376,7 +465,11 @@ void OPVDemodulator<FloatType>::do_frame(FloatType filtered_sample)
 		switch (frame_decode_result)
 		{
 		case OPVFrameDecoder::DecodeResult::EOS:
-			std::cerr << "EOS, going back to STREAM_SYNC state at sample " << debug_sample_count << std::endl;	//!!! debug
+			std::cerr << "EOS at sample " << debug_sample_count << std::endl;	//!!! debug
+			//!!! EOS is just a hint to upper layers; here's where we'd pass it up somehow.
+
+			// It's OK for a new stream to start immediately without a new preamble.
+			//!!! should be quick to drop out of lock if we don't detect an immediately next frame
 			demodState = DemodState::STREAM_SYNC;
 			break;
 		case OPVFrameDecoder::DecodeResult::OK:
@@ -429,6 +522,7 @@ void OPVDemodulator<FloatType>::operator()(const FloatType input)
 
 	auto filtered_sample = demod_filter(input);
 
+//	std::cerr << "@ " << debug_sample_count << " filtered_sample = " << filtered_sample << std::endl;	//!!!debug
 	correlator.sample(filtered_sample);
 
 	if (correlator.index() == 0)
@@ -467,6 +561,9 @@ void OPVDemodulator<FloatType>::operator()(const FloatType input)
 		// a sync word to find the proper sample_index.  We only leave
 		// this state if we believe that we have a valid sample_index.
 		do_unlocked();
+		break;
+	case DemodState::FIRST_SYNC:
+		do_first_sync();
 		break;
 	case DemodState::STREAM_SYNC:
 		do_stream_sync();

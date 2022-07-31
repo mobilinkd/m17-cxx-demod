@@ -12,6 +12,9 @@
 #include <type_traits>
 #include <tuple>
 #include <limits>
+#include <iostream>
+
+extern uint32_t debug_sample_count;
 
 namespace mobilinkd {
 
@@ -43,6 +46,9 @@ struct Correlator
     void sample(FloatType value)
     {
         limit_ = sample_filter(std::abs(value));
+
+//		std::cerr << "@ " << debug_sample_count << " filtered_sample = " << value << " limit = " << limit_ << std::endl;	//!!!debug
+
         buffer_[buffer_pos_] = value;
         prev_buffer_pos_ = buffer_pos_;
         if (++buffer_pos_ == buffer_.size()) buffer_pos_ = 0;
