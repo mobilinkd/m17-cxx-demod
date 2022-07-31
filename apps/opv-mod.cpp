@@ -42,7 +42,6 @@ using namespace mobilinkd;
 struct Config
 {
     std::string source_address;
-    std::string audio_device;
     bool verbose = false;
     bool debug = false;
     bool quiet = false;
@@ -67,8 +66,6 @@ struct Config
                 "transmitter identifier (your callsign).")
             ("token,T", po::value<uint64_t>(&result.token)->default_value(0x8765432112345678),
                 "authentication token")
-            ("audio,a", po::value<std::string>(&result.audio_device),
-                "audio device (default is STDIN).")
             ("bitstream,b", po::bool_switch(&result.bitstream),
                 "output bitstream (default is baseband).")
             ("bert,B", po::value<uint32_t>(&result.bert)->default_value(0),
