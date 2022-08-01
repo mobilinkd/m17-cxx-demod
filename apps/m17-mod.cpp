@@ -52,7 +52,11 @@ struct Config
     bool verbose = false;
     bool debug = false;
     bool quiet = false;
-    bool bitstream = false; // default is baseband audio
+
+    bool bin = false;
+    bool sym = false;
+    bool rrc = true; // default is rrc
+
     bool bert = false; // Bit error rate testing.
     bool invert = false;
     int can = 10;
@@ -81,11 +85,12 @@ struct Config
                 "event device (default is C-Media Electronics Inc. USB Audio Device).")
             ("key,k", po::value<uint16_t>(&result.key)->default_value(385),
                 "Linux event code for PTT (default is RADIO).")
-            ("bitstream,b", po::bool_switch(&result.bitstream),
-                "output bitstream (default is baseband).")
+            ("bin,x", po::bool_switch(&result.bin), "output packed dibits (default is rrc).")
+            ("rrc,r", po::bool_switch(&result.rrc), "output rrc filtered and scaled symbols (default).")
+            ("sym,s", po::bool_switch(&result.sym), "output symbols (default is rrc).")
             ("bert,B", po::bool_switch(&result.bert),
                 "output a bit error rate test stream (default is read audio from STDIN).")
-            ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (ignored for bitstream)")
+            ("invert,i", po::bool_switch(&result.invert), "invert the output baseband (only for rrc)")
             ("verbose,v", po::bool_switch(&result.verbose), "verbose output")
             ("debug,d", po::bool_switch(&result.debug), "debug-level output")
             ("quiet,q", po::bool_switch(&result.quiet), "silence all output")
@@ -140,6 +145,13 @@ struct Config
             return std::nullopt;
         }
 
+        if (result.sym + result.bin + result.rrc > 1)
+        {
+            std::cerr << "Only one of sym, bin or rrc may be chosen." << std::endl;
+            return std::nullopt;
+        }
+
+
         return result;
     }
 };
@@ -150,7 +162,9 @@ using lsf_t = std::array<uint8_t, 30>;
 
 std::atomic<bool> running{false};
 
-bool bitstream = false;
+enum class OutputType {SYM, BIN, RRC};
+
+OutputType outputType = OutputType::RRC;
 bool invert = false;
 int8_t can = 10;
 
@@ -226,6 +240,7 @@ std::array<int16_t, N*10> symbols_to_baseband(std::array<int8_t, N> symbols)
 
 using bitstream_t = std::array<int8_t, 368>;
 
+// bin
 void output_bitstream(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
     for (auto c : sync_word) std::cout << c;
@@ -241,6 +256,20 @@ void output_bitstream(std::array<uint8_t, 2> sync_word, const bitstream_t& frame
     }
 }
 
+// sym
+void output_symbols(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
+{
+    auto symbols = bits_to_symbols(frame);
+    auto sw = bytes_to_symbols(sync_word);
+
+    std::array<int8_t, 192> temp;
+    auto fit = std::copy(sw.begin(), sw.end(), temp.begin());
+    std::copy(symbols.begin(), symbols.end(), fit);
+    for (auto b : temp) std::cout << b;
+}
+
+
+// rrc
 void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
     auto symbols = bits_to_symbols(frame);
@@ -257,8 +286,18 @@ void output_baseband(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 
 void output_frame(std::array<uint8_t, 2> sync_word, const bitstream_t& frame)
 {
-    if (bitstream) output_bitstream(sync_word, frame);
-    else output_baseband(sync_word, frame);
+    switch(outputType) 
+    {
+        case OutputType::SYM:
+            output_symbols(sync_word, frame);
+            break;
+        case OutputType::BIN:
+            output_bitstream(sync_word, frame);
+            break;
+        default: // OutputType::RRC
+            output_baseband(sync_word, frame);
+            break;
+    }
 }
 
 void send_preamble()
@@ -267,15 +306,23 @@ void send_preamble()
     std::cerr << "Sending preamble." << std::endl;
     std::array<uint8_t, 48> preamble_bytes;
     preamble_bytes.fill(0x77);
-    if (bitstream)
-    {
-        for (auto c : preamble_bytes) std::cout << c;
-    }
-    else // baseband
-    {
-        auto preamble_symbols = bytes_to_symbols(preamble_bytes);
-        auto preamble_baseband = symbols_to_baseband(preamble_symbols);
-        for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+    switch(outputType) {
+        case OutputType::SYM: 
+            {
+                auto preamble_symbols = bytes_to_symbols(preamble_bytes);
+                for (auto b : preamble_symbols) std::cout << b;
+            }
+            break;
+        case OutputType::BIN:
+            for (auto c : preamble_bytes) std::cout << c;
+            break;
+        default: 
+            { // OutputType::RRC
+                auto preamble_symbols = bytes_to_symbols(preamble_bytes);
+                auto preamble_baseband = symbols_to_baseband(preamble_symbols);
+                for (auto b : preamble_baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+            }
+            break;
     }
 }
 
@@ -288,22 +335,36 @@ constexpr std::array<uint8_t, 2> EOT_SYNC = { 0x55, 0x5D };
 
 void output_eot()
 {
-    if (bitstream)
-    {
-        for (auto c : EOT_SYNC) std::cout << c;
-        for (size_t i = 0; i !=10; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
-    }
-    else
-    {
-        std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
-        out_symbols.fill(0);
-        auto symbols = bytes_to_symbols(EOT_SYNC);
-        for (size_t i = 0; i != symbols.size(); ++i)
-        {
-            out_symbols[i] = symbols[i];
-        }
-        auto baseband = symbols_to_baseband(out_symbols);
-        for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+    switch(outputType) {
+        case OutputType::SYM:
+            {
+                std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
+                out_symbols.fill(0);
+                auto symbols = bytes_to_symbols(EOT_SYNC);
+                for (size_t i = 0; i != symbols.size(); ++i)
+                {
+                    out_symbols[i] = symbols[i];
+                }
+                for (auto b : out_symbols) std::cout << b;
+            }
+            break;
+        case OutputType::BIN:
+            for (auto c : EOT_SYNC) std::cout << c;
+            for (size_t i = 0; i !=10; ++i) std::cout << '\0'; // Flush RRC FIR Filter.
+            break;
+        default: 
+            { // OutputType::RRC
+                std::array<int8_t, 48> out_symbols; // EOT symbols + FIR flush.
+                out_symbols.fill(0);
+                auto symbols = bytes_to_symbols(EOT_SYNC);
+                for (size_t i = 0; i != symbols.size(); ++i)
+                {
+                    out_symbols[i] = symbols[i];
+                }
+                auto baseband = symbols_to_baseband(out_symbols);
+                for (auto b : baseband) std::cout << uint8_t(b & 0xFF) << uint8_t(b >> 8);
+            }
+            break;
     }
 }
 
@@ -632,7 +693,16 @@ int main(int argc, char* argv[])
     auto config = Config::parse(argc, argv);
     if (!config) return 0;
 
-    bitstream = config->bitstream;
+    if (config->sym) {
+        outputType = OutputType::SYM;
+    }
+    else if (config->bin) {
+        outputType = OutputType::BIN;
+    }
+    else {
+        outputType = OutputType::RRC;
+    }
+
     invert = config->invert;
     can = config->can;
 
