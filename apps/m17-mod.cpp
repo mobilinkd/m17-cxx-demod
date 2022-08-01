@@ -85,7 +85,7 @@ struct Config
                 "event device (default is C-Media Electronics Inc. USB Audio Device).")
             ("key,k", po::value<uint16_t>(&result.key)->default_value(385),
                 "Linux event code for PTT (default is RADIO).")
-            ("bin,b", po::bool_switch(&result.bin), "output packed dibits (default is rrc).")
+            ("bin,x", po::bool_switch(&result.bin), "output packed dibits (default is rrc).")
             ("rrc,r", po::bool_switch(&result.rrc), "output rrc filtered and scaled symbols (default).")
             ("sym,s", po::bool_switch(&result.sym), "output symbols (default is rrc).")
             ("bert,B", po::bool_switch(&result.bert),
