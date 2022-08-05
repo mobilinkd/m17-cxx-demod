@@ -26,7 +26,7 @@ find_package(Threads REQUIRED)
 
 include(GNUInstallDirs)
 
-find_package(codec2 REQUIRED)
+#find_package(Opus REQUIRED)
 set(Boost_USE_STATIC_LIBS FALSE)
 find_package(Boost COMPONENTS program_options REQUIRED)
 
