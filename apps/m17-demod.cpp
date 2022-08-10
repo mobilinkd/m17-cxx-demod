@@ -154,9 +154,9 @@ bool dump_lsf(std::array<T, N> const& lsf)
     current_packet.clear();
     packet_frame_counter = 0;
 
-    if (!lsf[111]) // LSF type bit 0
+    if (!(lsf[13] & 1)) // LSF type bit 0
     {
-        uint8_t packet_type = (lsf[109] << 1) | lsf[110];
+        uint8_t packet_type = (lsf[13] & 6) >> 1;
 
         switch (packet_type)
         {
