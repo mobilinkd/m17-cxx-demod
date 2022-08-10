@@ -88,7 +88,7 @@ This can then be used with the the `M17_Impaired.grc` GNU Radio flow graph.
 
 There are two command line options for the demodulator that determine the diagnostic output.
 
-    -d causes demodulator diagnosts to be streamed to the terminal on STDERR.
+    -d causes demodulator diagnostics to be streamed to the terminal on STDERR.
     -l causes the link setup frame information (either from the first frame or LICH) to be displayed.
 
 Note that the oscillators on the PlutoSDR and on most RTL-SDR dongles are
@@ -115,7 +115,7 @@ The demodulator diagnostics are calibrated for the following command:
 Specifically, the initial rate (18k samples per second) and the conversion rate and gain (gain of 9,
 output rate 48k samples per second) are important for deviation and frequency offset.
 
-The demodulator produces diagnost output which looks like:
+The demodulator produces diagnostic output which looks like:
 
     SRC: BROADCAST, DEST: MBLKDTNC3, TYPE: 0002, NONCE: 0000000000000000000000000000, CRC: bb9b
     dcd: 1, evm:    13.27%, deviation:   0.9857, freq offset:  0.03534, locked:   true, clock:        1, sample: 0, 0, 0, cost: 9
