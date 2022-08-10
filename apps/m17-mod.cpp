@@ -619,6 +619,8 @@ void transmit(queue_t& queue, const lsf_t& lsf)
     auto data = make_data_frame(frame_number | 0x8000, encode(codec2, audio));
     send_audio_frame(lich[lich_segment], data);
     output_eot();
+
+    codec2_destroy(codec2);
 }
 
 #define USE_OLD_MODULATOR
