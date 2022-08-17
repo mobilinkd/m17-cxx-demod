@@ -51,7 +51,7 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
 ### Navigate to: 
     \etc\conda\activate.d\
     
-### And replace ```vs2019_compiler_vars.bat```  with the [File](vs2019_compiler_vars.bat).
+### And replace ```vs2019_compiler_vars.bat```  with the [File](https://raw.githubusercontent.com/Paulo-D2000/m17-cxx-demod/file_in_out/vs2019_compiler_vars.bat).
     
 ### Back Inside Conda environment type:
     conda activate M17
