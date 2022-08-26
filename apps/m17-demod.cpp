@@ -19,6 +19,11 @@
 #include <iostream>
 #include <vector>
 
+#ifdef WIN32
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 const char VERSION[] = "2.2";
 
 bool display_lsf = false;
@@ -438,6 +443,22 @@ int main(int argc, char* argv[])
 {
     using namespace mobilinkd;
     using namespace std::string_literals;
+	
+#ifdef WIN32
+	// Set "stdin" to have binary mode:
+   auto result = _setmode( _fileno( stdin ), _O_BINARY );
+   if( result == -1 )
+      perror( "Cannot set mode" );
+   else
+      std::cerr << "'stdin' successfully changed to binary mode\n";
+  
+  // Set "stdout" to have binary mode:
+  result = _setmode( _fileno( stdout ), _O_BINARY );
+   if( result == -1 )
+      perror( "Cannot set mode" );
+   else
+      std::cerr << "'stdout' successfully changed to binary mode\n";
+#endif
 
     auto config = Config::parse(argc, argv);
     if (!config) return 0;

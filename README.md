@@ -43,6 +43,19 @@ It also requires a modern C++17 compiler (GCC 8 minimum).
     conda create -n M17 vs2019_win-64 cmake ninja pkg-config boost-cpp gtest gmock gtest libcodec2
     conda activate M17
 
+### Extra Steps for Visual Studio 2022 - Inside Conda environment type:
+    conda env list
+    
+### Then navigate to the M17 path shown eg: 
+    C:\Users\USERNAME\.conda\envs\M17
+### Navigate to: 
+    \etc\conda\activate.d\
+    
+### And replace ```vs2019_compiler_vars.bat```  with the [File](https://raw.githubusercontent.com/Paulo-D2000/m17-cxx-demod/file_in_out/vs2019_compiler_vars.bat).
+    
+### Back Inside Conda environment type:
+    conda activate M17
+
 ### And then from the top level of the m17-cxx-demod repo, execute win_build.bat
 
 ## Running
