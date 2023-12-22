@@ -18,7 +18,10 @@ stream from STDIN and writes out an M17 4-FSK baseband stream at 48k SPS,
 
 ### Prerequisites
 
-This code requires the codec2-devel, boost-devel and gtest-devel packages be installed.
+This code requires the cmake, make, codec2-devel, boost-devel, boost-program-options-devel and gtest-devel packages be installed.
+In debian systems, the names of these packages are libcodec2-dev libboost-dev libgtest-dev and libboost-program-options-dev. 
+In other distribution systems, the package names may be different. Under debian, you can use the following command to install.
+`apt-get install -y cmake make libcodec2-dev libboost-dev libgtest-dev libboost-program-options-dev`
 
 It also requires a modern C++17 compiler (GCC 8 minimum).
 
