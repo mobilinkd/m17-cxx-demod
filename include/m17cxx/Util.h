@@ -9,7 +9,7 @@
 #include <bitset>
 #include <tuple>
 #include <limits>
-
+#include <cstdint>
 
 namespace mobilinkd
 {
