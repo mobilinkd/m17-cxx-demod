@@ -216,12 +216,28 @@ struct M17Demodulator
     void operator()(const FloatType input);
 };
 
+/**
+ * Update the deviation & offset from the stored correlator samples. This is
+ * called after a sync word has been detected.
+ *
+ * @pre @p sample_index is the best estimate of the sample point and has
+ *  been set, either by the clock recovery system or from a sync word if
+ *  the demodulator was in an unlocked state.
+ *
+ * @post @p dev has been updated with the latest sync word samples. And
+ *  @p sync_sample_index is set to the current sync word tigger point.
+ *
+ * @param index is the current sync word trigger point.
+ */
 template <typename FloatType>
 void M17Demodulator<FloatType>::update_values(uint8_t index)
 {
-    sync_sample_index = index;
+    // For deviation and offset to be accurate, this must be the stable
+    // sample_index. The sync word trigger point is too noisy, resulting
+    // in inaccurate frequency offset and deviation estimates.
     auto [mn, mx] = correlator.outer_symbol_levels(sample_index);
     dev.update(mn, mx);
+    sync_sample_index = index;
 }
 
 template <typename FloatType>
@@ -341,6 +357,7 @@ void M17Demodulator<FloatType>::do_lsf_sync()
         sync_triggered = preamble_sync.triggered(correlator);
         if (sync_triggered > 0.1)
         {
+            need_clock_update_ = true;
             sync_count += 1;
             return;
         }
