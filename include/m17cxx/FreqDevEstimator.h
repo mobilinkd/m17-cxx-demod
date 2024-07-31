@@ -32,7 +32,7 @@ public:
     {
         auto mnf = minFilter_.update(minValue, 192);
         auto mxf = maxFilter_.update(maxValue, 192);
-        offset_ = mxf[0] + mnf[0];
+        offset_ = (mxf[0] + mnf[0]) / 2.;
         idev_ = 6.0 / (mxf[0] - mnf[0]);
 
         if (isnan(mnf) || isnan(mxf)) reset_ = true;
@@ -42,7 +42,7 @@ public:
             reset_ = false;
             minFilter_.reset(minValue);
             maxFilter_.reset(maxValue);
-            offset_ = minValue + maxValue;
+            offset_ = (minValue + maxValue) / 2;
             idev_ = 6.0 / (maxValue - minValue);
         }
     }
