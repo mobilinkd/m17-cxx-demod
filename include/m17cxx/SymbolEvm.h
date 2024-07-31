@@ -1,83 +1,54 @@
-// Copyright 2020 Mobilinkd LLC.
+// Copyright 2020-2022 Mobilinkd LLC.
 
 #pragma once
 
-#include "IirFilter.h"
-
-#include <array>
-#include <algorithm>
-#include <numeric>
-#include <optional>
-#include <tuple>
+#include "StandardDeviation.h"
 
 namespace mobilinkd
 {
 
-template <typename FloatType, size_t N>
+/**
+ * Compute the EVM of a symbol. This assumes that the incoming sample has
+ * been normalized, meaning its offset and scale has been adjusted so that
+ * nominal values fall exactly on the symbol values of -3, -1, 1, 3. It
+ * determines the nearest symbol value and computes the variance.
+ * 
+ * This uses a running standard deviation with a nominal length of 184
+ * symbols. That is the payload size of an M17 frame.
+ */
+template <typename FloatType>
 struct SymbolEvm
 {
-    using filter_type = BaseIirFilter<FloatType, N>;
-    using symbol_t = int;
-    using result_type = std::tuple<symbol_t, FloatType>;
-
-    filter_type filter_;
-    std::optional<FloatType> erasure_limit_;
-    FloatType evm_ = 0.0;
-
-    SymbolEvm(filter_type&& filter, std::optional<FloatType> erasure_limit = std::nullopt)
-    : filter_(std::forward<filter_type>(filter))
-    , erasure_limit_(erasure_limit)
-    {}
-    
-    FloatType evm() const { return evm_; }
-    
-    /**
-     * Decode a normalized sample into a symbol.  Symbols
-     * are decoded into +3, +1, -1, -3.  If an erasure limit
-     * is set, symbols outside this limit are 'erased' and
-     * returned as 0.
-     */
-    result_type operator()(FloatType sample)
+    RunningStandardDeviation<FloatType, 184> stddev;
+   
+    void reset()
     {
-        symbol_t symbol;
-        FloatType evm;
+        stddev.reset();
+    }
 
-        sample = std::min(3.0, std::max(-3.0, sample));
+    FloatType evm() const { return stddev.stdev(); }
+
+    void update(FloatType sample)
+    {
+        FloatType evm;
 
         if (sample > 2)
         {
-            symbol = 3;
-            evm = (sample - 3) * 0.333333;
+            stddev.capture(sample - 3);
         }
         else if (sample > 0)
         {
-            symbol = 1;
-            evm = sample - 1;
+            stddev.capture(sample - 1);
         }
-        else if (sample >= -2)
+        else if (sample > -2)
         {
-            symbol = -1;
-            evm = sample + 1;
+            stddev.capture(sample + 1);
         }
         else
         {
-            symbol = -3;
-            evm = (sample + 3) * 0.333333;
+            stddev.capture(sample + 3);
         }
-
-        if (erasure_limit_ and (abs(evm) > *erasure_limit_)) symbol = 0;
-        
-        evm_ = filter_(evm);
-        
-        return std::make_tuple(symbol, evm);
     }
 };
-
-template <typename FloatType, size_t N>
-SymbolEvm<FloatType, N> makeSymbolEvm(
-    BaseIirFilter<FloatType, N>&& filter, std::optional<FloatType> erasure_limit = std::nullopt)
-{
-    return std::move(SymbolEvm<FloatType, N>(std::move(filter), erasure_limit));
-}
 
 } // mobilinkd

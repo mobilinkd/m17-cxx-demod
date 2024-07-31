@@ -316,7 +316,7 @@ bool handle_frame(mobilinkd::M17FrameDecoder::output_buffer_t const& frame, int 
             result = dump_lsf(frame.lsf);
             break;
         case FrameType::LICH:
-            std::cerr << "LICH" << std::endl;
+            std::cerr << "\nLICH" << std::endl;
             break;
         case FrameType::STREAM:
             result = demodulate_audio(frame.stream, viterbi_cost);
@@ -341,20 +341,20 @@ void diagnostic_callback(bool dcd, FloatType evm, FloatType deviation, FloatType
 {
     if (debug) {
         std::cerr << "\rdcd: " << std::setw(1) << int(dcd)
-            << ", evm: " << std::setfill(' ') << std::setprecision(4) << std::setw(8) << evm * 100 <<"%"
-            << ", deviation: " << std::setprecision(4) << std::setw(8) << deviation
-            << ", freq offset: " << std::setprecision(4) << std::setw(8) << offset
-            << ", locked: " << std::boolalpha << std::setw(6) << locked << std::dec
-            << ", clock: " << std::setprecision(7) << std::setw(8) << clock
-            << ", sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
-            << ", cost: " << viterbi_cost;
+            << ", evm: " << std::setfill(' ') << std::setprecision(2) << std::setw(6) << evm * 100 <<"%"
+            << ", deviation: " << std::setw(5) << int(deviation)
+            << "Hz, freq offset: " << std::setfill(' ') << std::setw(5) << int(offset * 800)
+            << "Hz, locked: " << std::boolalpha << std::setw(5) << locked << std::dec
+            << ", clock: " << std::setprecision(2) << std::fixed << std::setw(8) << (clock * 1'000'000.0)
+            << "ppm, sample: " << std::setw(1) << sample_index << ", "  << sync_index << ", " << clock_index
+            << ", cost: " << std::setfill(' ') << std::setw(3) << viterbi_cost;
     }
         
-    if (!dcd && prbs.sync()) { // Seems like there should be a better way to do this.
+    if (!dcd && (prbs.bits() > 0)) { // Seems like there should be a better way to do this.
         prbs.reset();
     }
 
-    if (prbs.sync() && !quiet) {
+    if ((prbs.bits() > 0) && !quiet) {
         if (!debug) {
             std::cerr << '\r';
         } else {
@@ -486,7 +486,7 @@ int main(int argc, char* argv[])
         int16_t sample;
         std::cin.read(reinterpret_cast<char*>(&sample), 2);
         if (invert_input) sample *= -1;
-        demod(sample / 44000.0);
+        demod(sample / 41067.0);
     }
 
     std::cerr << std::endl;

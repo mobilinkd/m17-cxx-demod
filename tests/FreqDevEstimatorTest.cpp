@@ -25,31 +25,11 @@ TEST_F(FreqDevEstimatorTest, construct)
 
 TEST_F(FreqDevEstimatorTest, fde_preamble)
 {
-    constexpr std::array<float, 24> input = {1,1,1,1,1,1,1,1,1,1,1,1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
-
     auto fde = mobilinkd::FreqDevEstimator<float>();
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x * 3);});
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x * 3);});
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x * 3);});
+    fde.update(-3, 3);
+    fde.update(-3, 3);
+    fde.update(-3, 3);
 
-    fde.update();
-
-    EXPECT_NEAR(fde.deviation(), 1, .1);
-    EXPECT_NEAR(fde.error(), 0, .1);
-}
-
-TEST_F(FreqDevEstimatorTest, fde_mixed)
-{
-    constexpr std::array<float, 16> input = {1,1,1,1,1,1,1,1,-1,-1,-1,-1,-1,-1,-1,-1};
-
-    auto fde = mobilinkd::FreqDevEstimator<float>();
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x * 3);});
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x);});
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x * 3);});
-    std::for_each(input.begin(), input.end(), [&fde](float x){fde.sample(x);});
-
-    fde.update();
-
-    EXPECT_NEAR(fde.deviation(), 1, .1);
+    EXPECT_NEAR(fde.deviation(), 2400, .1);
     EXPECT_NEAR(fde.error(), 0, .1);
 }

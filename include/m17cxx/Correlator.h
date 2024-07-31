@@ -85,16 +85,32 @@ struct Correlator
         size_t min_count = 0;
         size_t max_count = 0;
         size_t index = 0;
+        FloatType min_level = buffer_[sample_index];
+        FloatType max_level = buffer_[sample_index];
+
+        for (size_t i = sample_index; i < buffer_.size(); i += SAMPLES_PER_SYMBOL)
+        {
+            min_level = std::min(min_level, buffer_[i]);
+            max_level = std::max(max_level, buffer_[i]);
+        }
+
+        FloatType avg = max_level + min_level / 2.;
+
         for (size_t i = sample_index; i < buffer_.size(); i += SAMPLES_PER_SYMBOL)
         {
             tmp[index++] = buffer_[i] * 1000.;
-            max_sum += buffer_[i] * ((buffer_[i] > 0.));
-            min_sum += buffer_[i] * ((buffer_[i] < 0.));
-            max_count += (buffer_[i] > 0.);
-            min_count += (buffer_[i] < 0.);
+            bool high = buffer_[i] > avg;
+            bool low = buffer_[i] < avg;
+            max_sum += buffer_[i] * high;
+            min_sum += buffer_[i] * low;
+            max_count += high;
+            min_count += low;
         }
+        
+        FloatType mn = min_count > 0 ? min_sum / min_count : min_level;
+        FloatType mx = max_count > 0 ? max_sum / max_count : max_level;
 
-        return std::make_tuple(min_sum / min_count, max_sum / max_count);
+        return std::make_tuple(mn, mx);
     }
 
 
@@ -140,11 +156,29 @@ struct SyncWord
 		return (value > limit_1 || value < limit_2) ? value : 0.0;
 	}
 
+	bool is_triggered() const { return triggered_; }
+
+	void find_peak(value_type value)
+	{
+		triggered_ = false;
+		timing_index_ = 0;
+		auto peak_value = value;
+		uint8_t index = 0;
+		for (auto f : samples_)
+		{
+			if (abs(f) > abs(peak_value))
+			{
+				peak_value = f;
+				timing_index_ = index;
+			}
+			index += 1;
+		}
+		updated_ = peak_value > 0 ? 1 : -1;
+	}
+
 	size_t operator()(Correlator& correlator)
 	{
 		auto value = triggered(correlator);
-
-		value_type peak_value = 0;
 
 		if (value != 0)
 		{
@@ -159,21 +193,7 @@ struct SyncWord
 		{
 			if (triggered_)
 			{
-				// Calculate the timing index on the falling edge.
-				triggered_ = false;
-				timing_index_ = 0;
-				peak_value = value;
-				uint8_t index = 0;
-				for (auto f : samples_)
-				{
-					if (abs(f) > abs(peak_value))
-					{
-						peak_value = f;
-						timing_index_ = index;
-					}
-					index += 1;
-				}
-				updated_ = peak_value > 0 ? 1 : -1;
+				find_peak(value);
 			}
 		}
 		return timing_index_;

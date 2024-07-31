@@ -20,6 +20,8 @@ stream from STDIN and writes out an M17 4-FSK baseband stream at 48k SPS,
 
 This code requires the codec2-devel, boost-devel and gtest-devel packages be installed.
 
+This code also now requires the Blaze C++ math library.
+
 It also requires a modern C++17 compiler (GCC 8 minimum).
 
 ### Build Steps
