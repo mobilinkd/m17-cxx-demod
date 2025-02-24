@@ -18,6 +18,27 @@ if(NOT CMAKE_BUILD_TYPE)
     message(STATUS "Build type not specified: defaulting to release.")
 endif()
 
+# Ensure submodules are checked out
+message(STATUS "# Checking submodules")
+find_package(Git REQUIRED)
+
+if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+        RESULT_VARIABLE GIT_SUBMODULE_RESULT
+        OUTPUT_VARIABLE GIT_SUBMODULE_OUTPUT
+        ERROR_VARIABLE GIT_SUBMODULE_ERROR
+    )
+
+    if(NOT ${GIT_SUBMODULE_RESULT} EQUAL 0)
+        message(FATAL_ERROR "Failed to update submodules: ${OUTPUT_VARIABLE}")
+    endif()
+    include_directories (
+        blaze
+    )
+endif()
+
 # Check for dependencies
 message(STATUS "# Checking dependencies")
 
@@ -29,26 +50,6 @@ include(GNUInstallDirs)
 find_package(codec2 REQUIRED)
 set(Boost_USE_STATIC_LIBS FALSE)
 find_package(Boost COMPONENTS program_options REQUIRED)
-
-if (BLAZE_INCLUDE_DIR)
-
-  # in cache already
-  set(BLAZE_FOUND TRUE)
-  message(STATUS "Have blaze")
-else (BLAZE_INCLUDE_DIR)
-
-find_path(BLAZE_INCLUDE_DIR NAMES blaze/Blaze.h
-     PATHS
-     ${INCLUDE_INSTALL_DIR}
-   )
-
-include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(BLAZE DEFAULT_MSG BLAZE_INCLUDE_DIR)
-
-mark_as_advanced(BLAZE_INCLUDE_DIR)
-message(STATUS "Found blaze")
-
-endif(BLAZE_INCLUDE_DIR)
 
 # Add subdirectories
 add_subdirectory(src)
