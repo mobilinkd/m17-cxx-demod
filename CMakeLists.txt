@@ -19,10 +19,11 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # Ensure submodules are checked out
-message(STATUS "# Checking submodules")
+message(STATUS "Checking for git")
 find_package(Git REQUIRED)
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/.git")
+    message(STATUS "Fetching blaze submodule")
     execute_process(
         COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive
         WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
